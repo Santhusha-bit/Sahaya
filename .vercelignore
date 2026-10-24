@@ -1,0 +1,11 @@
+# Never upload local secrets or non-Next assets to the deployment.
+.env
+.env.*
+.env*.local
+services/
+.claude/
+tests/
+scripts/demo-*.ts
+scripts/redteam.ts
+scripts/serve-guardian.ts
+redteam-report.md
