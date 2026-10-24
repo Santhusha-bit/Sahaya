@@ -1,5 +1,6 @@
-// Kinline service worker — minimal offline app shell.
-const CACHE = "kinline-v1";
+// Kinline service worker — network-first app shell with offline fallback.
+// Bump CACHE whenever the shell/UI changes so old caches are purged on activate.
+const CACHE = "kinline-v3";
 const SHELL = ["/", "/agents", "/activity", "/family", "/profile", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -9,27 +10,30 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))),
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
-  // Never cache API calls — agents must be live.
-  if (url.pathname.startsWith("/api/")) return;
 
-  if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/")));
-    return;
-  }
+  // Never touch API calls or Next.js dev/HMR traffic — agents and live reload must be fresh.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/webpack-hmr")) return;
+
+  // Network-first for everything else: the latest deploy always wins; cache is only
+  // a fallback when the network is unavailable (true offline support).
   event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
-      return res;
-    }).catch(() => cached)),
+    fetch(request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(request).then((cached) => cached || caches.match("/"))),
   );
 });
