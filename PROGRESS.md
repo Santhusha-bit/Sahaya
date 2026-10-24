@@ -132,3 +132,61 @@ on the status page).
 - `npm run lint` is not configured in this repo (no ESLint setup); `npm run
   typecheck` covers static checking.
 - The Jira live REST path is written to spec but unverified (no Atlassian creds).
+
+---
+
+# Part 5 — Wellness Agent ✅ done
+
+Built on the merged base (four-agent runtime + Guardian tracks + polished UI).
+Reuses the existing audit log, integration-status registry, consent, event bus,
+scoped memory and approvals — no infrastructure duplicated.
+
+## Part 5 Track A — Bitdeer structured extraction ✅
+- `src/integrations/bitdeer.ts` — `WellnessInferenceProvider` + real
+  `BitdeerInferenceAdapter` (OpenAI-compatible, verified endpoints/auth/models) +
+  `SandboxWellnessInferenceAdapter`. Provider swappable for tests/demos.
+- `src/agents/wellness/observationSchema.ts` — strict zod schema (`.strict()`).
+- `src/agents/wellness/privacyFilter.ts` — PII minimization + length cap before
+  anything leaves the device.
+- `src/agents/wellness/observationPolicy.ts` — PURE deterministic engine: schema,
+  injection, medical, evidence grounding, unit/range. Model strictly advisory.
+- `src/agents/wellness/extractObservations.ts` — consent-gated pipeline with audit.
+- `src/agents/wellness/wellnessStore.ts` — canonical store: provenance, dedup,
+  correction (with history), soft-delete.
+- Demo: `npm run demo:bitdeer`. Tests: `tests/bitdeer.test.ts` (18).
+
+## Part 5 Track B — Full integration + dashboard ✅
+- `src/integrations/{moss,backboard,tigerdata,snowflake}.ts` — each live/sandbox
+  behind one interface; factory + test injection hooks like `search.ts`.
+- `src/agents/wellness/wellnessWorkflow.ts` — `runWellnessTurn` orchestration;
+  external failures degrade safely and are reported honestly (never corrupt Convex).
+- `src/agents/wellness/householdAnalytics.ts` — de-identified monthly aggregates,
+  authorization, consent withdrawal, monthly report.
+- New Wellness tools: `processWellnessConversation`, `reviewRememberedObservations`,
+  `correctRememberedObservation`, `forgetRememberedObservation`, `getWellnessTrends`,
+  `updateHouseholdAnalytics`. `AgentService.runTool` added for agent-specific UIs.
+- `src/app/wellness/page.tsx` + `src/app/api/wellness/{dashboard,observation}` —
+  the Unified Wellness Dashboard, verified rendering + actions against a live dev
+  server (message → extraction → dashboard → correct → analytics sync).
+- Demos: `demo:wellness-memory`, `demo:backboard`, `demo:tigerdata`,
+  `demo:snowflake`, `demo:wellness-full`. Tests: `tests/wellnessIntegration.test.ts` (8).
+
+## Part 5 Track C — Red-team ✅
+- `src/redteam/wellnessCases.ts` (32 cases), `wellnessRunner.ts`,
+  `scripts/redteam-wellness.ts`. `npm run redteam:wellness` → 32/32 defended,
+  exits non-zero on any failure or <30 cases. Tests: `tests/wellnessRedteam.test.ts` (4).
+
+## Part 5 verification
+- `npm run typecheck` green. `npm test` = 90 tests across 13 files (was 60 base).
+- `npm run build` green (Next 15.5.28); routes `/wellness`, `/api/wellness/*` present.
+- All six Part 5 demos pass; `redteam:wellness` 32/32.
+- Regression: Guardian/Care/Finance demos still pass; `npm run redteam` 34/34.
+
+## Integration honesty (Part 5)
+- Bitdeer: live with `BITDEER_API_KEY`, else sandbox (deterministic extractor). The
+  strict schema + evidence grounding are identical in both modes.
+- Moss / Backboard / Tiger Data / Snowflake: live with their creds, else a sandbox
+  with the same interface (nothing leaves the device). No sponsor creds supplied
+  here, so all show sandbox; the live code paths activate when creds are added and
+  are written to each provider's documented REST shape (live paths UNVERIFIED
+  without creds).

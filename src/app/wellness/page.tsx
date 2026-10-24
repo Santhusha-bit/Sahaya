@@ -129,9 +129,9 @@ export default function WellnessDashboardPage() {
       <header className="relative overflow-hidden rounded-[24px] p-5 text-white" style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", boxShadow: "var(--shadow-lg)" }}>
         <div aria-hidden className="pointer-events-none absolute -right-8 -top-12 h-36 w-36 rounded-full bg-white/15 blur-2xl" />
         <div className="relative flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-[22px] backdrop-blur">✨</span>
+          <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-[22px] backdrop-blur">✨</span>
           <div>
-            <div className="text-[22px] font-extrabold tracking-tight">Wellness</div>
+            <h1 className="text-[22px] font-extrabold tracking-tight">Wellness</h1>
             <div className="text-[13px] text-white/85">Hello {data.user.name}. Here's everything in one place.</div>
           </div>
         </div>
@@ -181,6 +181,7 @@ export default function WellnessDashboardPage() {
               <div className="mt-2.5 flex items-center gap-2">
                 <input
                   autoFocus value={editText} onChange={(e) => setEditText(e.target.value)}
+                  aria-label={o.value !== undefined ? "Correct the value in hours" : "Correct the description"}
                   placeholder={o.value !== undefined ? "Correct value (hours)" : "Correct description"}
                   className="h-10 flex-1 rounded-xl border border-[var(--line)] px-3 text-[14px] outline-none"
                 />

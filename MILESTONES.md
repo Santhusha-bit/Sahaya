@@ -68,3 +68,56 @@ Python uAgents bridge (wellness + guardian) exchanging typed messages, TS agents
 calling bridges over local HTTP, only declared bus events crossing. Sandbox
 fallback to the in-process bus, honestly `unavailable` when Python/uagents absent.
 Demo: `npm run demo:agents`.
+
+---
+
+# Part 5 — Wellness Agent (Bitdeer AI, integration & security)
+
+Layered on the same four-agent runtime. Reuses the Claude orchestrator, Convex,
+tool registry, event bus, consent, approvals, audit log, and integration-status
+registry — no infrastructure duplicated. Built in three tracks.
+
+## Part 5 Track A — Bitdeer AI Model Studio (structured extraction)
+Verified against Bitdeer's official docs: OpenAI-compatible inference at
+`https://api-inference.bitdeer.ai/v1/chat/completions`, `Authorization: Bearer`,
+real models (e.g. `deepseek-ai/DeepSeek-V4-Flash`, GLM-5.2, Qwen3.5-397B-A17B).
+
+- `WellnessInferenceProvider` interface with `BitdeerInferenceAdapter` (real API,
+  plain fetch, no new SDK) and `SandboxWellnessInferenceAdapter` (deterministic
+  offline, same interface). Claude stays the conversational orchestrator; the
+  inference provider is strictly advisory.
+- Workflow: consent check → privacy minimization → provider inference → strict
+  schema validation → evidence grounding against the source → reject/confirm
+  uncertain → store canonical with model provenance → surface on the dashboard.
+- Deterministic policy engine (`observationPolicy.ts`): schema + injection +
+  medical + evidence + unit/range. Never converts vague descriptions into invented
+  numbers; never emits diagnoses or medication advice. All decisions in code.
+- Demo: `npm run demo:bitdeer` (real request when configured, else labeled sandbox).
+
+## Part 5 Track B — Full integration + unified dashboard
+- Integration adapters, each live/sandbox behind one interface: Moss (continuity
+  memory), Backboard (historical context), Tiger Data (sleep/energy time series +
+  trends, idempotent on observation id), Snowflake (de-identified household
+  analytics with authorization + consent withdrawal).
+- Main scenario (`runWellnessTurn`): Claude understands → Bitdeer extracts → policy
+  validates → Convex stores canonical → Moss continuity → Backboard history →
+  Tiger Data trend → contextual non-diagnostic follow-up → authorized household
+  aggregates → Sarah sees only permitted analytics. External failures never corrupt
+  Convex and never block the core turn; failed syncs are reported honestly.
+- Canonical store with provenance, dedup, in-place correction (keeps history), and
+  soft-delete (hidden from all active readers, retained for audit).
+- Unified Wellness Dashboard (`/wellness`): conversation entry, recent
+  observations with review/correct/forget, personal & historical memory, sleep/
+  energy trends, monthly household report, consent & privacy controls, integration
+  status, audit timeline. Accessible, mobile-first, senior-readable.
+- Demos: `npm run demo:wellness-memory`, `demo:backboard`, `demo:tigerdata`,
+  `demo:snowflake`, `demo:wellness-full`.
+
+## Part 5 Track C — Wellness security & red-team
+32 adversarial cases (≥30 required) covering all the prompt's scenarios run against
+the REAL deterministic enforcement (policy engine, scoped memory, consent gate,
+canonical store, household authorization, integration-honesty reporting). Each case
+records id, input, expected behavior, actual result, enforcement layer, pass/fail,
+and an audit reference. `npm run redteam:wellness` writes a report and exits
+non-zero on any failure or fewer than 30 cases. Enforcement fixes went into code
+(e.g. the injection layer), not prompts.
