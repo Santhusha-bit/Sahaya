@@ -28,6 +28,7 @@ next-env.d.ts
 
 # generated reports
 redteam-report.md
+redteam-wellness-report.md
 
 # python bridge
 __pycache__/
