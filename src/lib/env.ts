@@ -67,6 +67,18 @@ export function auth0Status(): IntegrationStatus {
   };
 }
 
+export function twilioStatus(): IntegrationStatus {
+  const live = has("TWILIO_ACCOUNT_SID") && has("TWILIO_AUTH_TOKEN");
+  return {
+    key: "twilio",
+    label: "Twilio Voice (scam-call demo)",
+    mode: live ? "live" : "unavailable",
+    detail: live
+      ? "Live — callers dial the Twilio number; Guardian screens the transcript and speaks the warning."
+      : "Unavailable — no Twilio credentials; use the in-app voice mic to demo scam-call detection.",
+  };
+}
+
 export function fetchaiStatus(): IntegrationStatus {
   const live = has("FETCHAI_BRIDGE_URL");
   return {
@@ -136,6 +148,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     jiraStatus(),
     elasticStatus(),
     fetchaiStatus(),
+    twilioStatus(),
     armadinStatus(),
     mossStatus(),
   ];
