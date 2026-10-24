@@ -33,8 +33,25 @@ from the repo root.
   the same policy/tools). The policy engine is identical in both modes.
 - Convex: live with `NEXT_PUBLIC_CONVEX_URL`, else in-process store.
 
-## Track 2 — Adversarial red-team harness ⏳ next
-## Track 3 — Controlled agent actions (Jira-style) ⏳ todo
+## Track 2 — Adversarial red-team harness ✅ done
+- `src/redteam/cases.ts` — 34 attack cases across family/bank/official impersonation,
+  urgency & secrecy, gift cards, crypto, tech support, prompt injection, data
+  exfiltration, callback substitution, multi-turn pressure, fake approval, verifier
+  social engineering, and quiet (low-signal) payments.
+- `src/redteam/runner.ts` — runs each case through the REAL scam workflow, records
+  verdict, which layer defended it (signal / policy / approval), and pass/fail;
+  `formatReport` renders a readable Markdown table.
+- `scripts/redteam.ts` + `npm run redteam` — prints the report, writes
+  `redteam-report.md` (gitignored), exits non-zero on any failure, on <30 cases,
+  or on <3 model-level misses.
+- Tests: `tests/redteam.test.ts` (5).
+- Result: 34/34 defended; 15 model-level misses caught by the deterministic layer
+  (requirement ≥3); 2 attacks stopped specifically by the approval gate. No prompt
+  tuning: the hardening went into the classifier/policy engine.
+- Armadin shown as `unavailable` on the status page (no sponsor API); the suite is
+  a local, honest adversarial harness.
+
+## Track 3 — Controlled agent actions (Jira-style) ⏳ next
 ## Track 4 — Elastic incident search ⏳ todo
 ## Track 5 — Fetch.ai agent-to-agent messaging ⏳ todo
 

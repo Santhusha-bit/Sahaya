@@ -26,6 +26,9 @@ next-env.d.ts
 *.pem
 *.tsbuildinfo
 
+# generated reports
+redteam-report.md
+
 # logs
 npm-debug.log*
 yarn-debug.log*

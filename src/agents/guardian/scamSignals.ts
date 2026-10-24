@@ -98,23 +98,26 @@ export function detectSignals(text: string): SignalAnalysis {
  */
 export function classifyRequestedAction(text: string): RequestedAction {
   const t = text;
+  const raw = t.slice(0, 200);
 
-  // Payment request?
+  // 1. An explicit payment method is the strongest signal.
   const paymentMethod = detectPaymentMethod(t);
-  const mentionsSend = /\b(send|pay|transfer|wire|buy|purchase|deposit|load)\b/i.test(t);
-  if (paymentMethod || (mentionsSend && /\$|\bdollars?\b|money|cash|funds|payment/i.test(t))) {
-    return {
-      type: "payment",
-      paymentMethod: paymentMethod ?? "other",
-      amount: detectAmount(t),
-      raw: t.slice(0, 200),
-    };
+  if (paymentMethod) {
+    return { type: "payment", paymentMethod, amount: detectAmount(t), raw };
   }
 
-  // Disclosure request?
+  // 2. A request to disclose something sensitive.
   const discloseKind = detectDiscloseKind(t);
   if (discloseKind) {
-    return { type: "disclose", discloseKind, raw: t.slice(0, 200) };
+    return { type: "disclose", discloseKind, raw };
+  }
+
+  // 3. Generic money movement with no named method, even if politely worded and
+  //    free of scam vocabulary — the deterministic layer still blocks it.
+  const sendVerb = /\b(send|pay|transfer|wire|deposit|forward|remit|western union)\b/i.test(t);
+  const moneyish = /\$|\bdollars?\b|\busd\b|money|cash|funds|payment|account|routing|balance/i.test(t);
+  if (sendVerb && (moneyish || detectAmount(t) !== undefined)) {
+    return { type: "payment", paymentMethod: "other", amount: detectAmount(t), raw };
   }
 
   return { type: "none" };
@@ -135,9 +138,11 @@ function detectDiscloseKind(t: string): DiscloseKind | undefined {
   if (/bank account|routing number|account and routing|account number/i.test(t)) return "bank";
   if (/card number|cvv|\bpin\b/i.test(t)) return "card";
   if (/password|passcode|login|credentials/i.test(t)) return "password";
-  if (/home address|where (do )?you live|your address/i.test(t)) return "address";
-  // Generic "give me your ... number / details"
-  if (/(give|send|tell|share|confirm|provide)\s+(me\s+)?(your|the)\s+.*(number|details|code|account)/i.test(t))
+  if (/home address|where (do )?you live|your (full )?address/i.test(t)) return "address";
+  if (/contact list|address book|your contacts|list of (your )?contacts|everyone in your (phone|contacts)|phone numbers of/i.test(t))
+    return "contact";
+  // Generic "give me your ... number / details / account"
+  if (/(give|send|tell|share|confirm|provide|read (me|back))\s+(me\s+)?(your|the)\s+.*(number|details|code|account|card)/i.test(t))
     return "contact";
   return undefined;
 }

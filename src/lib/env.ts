@@ -67,6 +67,18 @@ export function auth0Status(): IntegrationStatus {
   };
 }
 
+export function armadinStatus(): IntegrationStatus {
+  const live = has("ARMADIN_API_KEY");
+  return {
+    key: "armadin",
+    label: "Armadin (adversarial testing)",
+    mode: live ? "live" : "unavailable",
+    detail: live
+      ? "Live — Armadin adversarial API."
+      : "Unavailable — the red-team suite (npm run redteam) runs locally against Guardian; no Armadin API is used.",
+  };
+}
+
 export function mossStatus(): IntegrationStatus {
   const live = has("MOSS_API_KEY");
   return {
@@ -85,6 +97,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     convexStatus(),
     cartesiaStatus(),
     auth0Status(),
+    armadinStatus(),
     mossStatus(),
   ];
 }

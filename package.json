@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "convex:dev": "convex dev",
-    "demo:scam": "vite-node --config vitest.config.ts scripts/demo-scam.ts"
+    "demo:scam": "vite-node --config vitest.config.ts scripts/demo-scam.ts",
+    "redteam": "vite-node --config vitest.config.ts scripts/redteam.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
