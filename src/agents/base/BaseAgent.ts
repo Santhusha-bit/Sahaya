@@ -1,6 +1,7 @@
 import { correlationId as newCorrelationId, id, now } from "@/lib/id";
 import { llmAvailable, llmTurn, type LlmMessage, type LlmToolSpec } from "@/lib/llm";
 import { AgentEventBus } from "./AgentEventBus";
+import { AuditLog } from "./audit";
 import type { ConsentSettings } from "./policy";
 import { DEFAULT_CONSENT } from "./policy";
 import { ScopedMemoryImpl } from "./ScopedMemory";
@@ -83,6 +84,7 @@ export abstract class BaseAgent {
   private _bus?: AgentEventBus;
   private _tasks?: TaskService;
   private _approvals?: ApprovalService;
+  private _audit?: AuditLog;
 
   constructor(deps: AgentDeps) {
     this.data = deps.data;
@@ -106,6 +108,9 @@ export abstract class BaseAgent {
   }
   get approvalService(): ApprovalService {
     return (this._approvals ??= new ApprovalService(this.data.approvals, this.id, this.userId));
+  }
+  get audit(): AuditLog {
+    return (this._audit ??= new AuditLog(this.data.memory, this.userId));
   }
 
   private getToolMap(): Map<string, AgentTool> {
@@ -183,6 +188,7 @@ export abstract class BaseAgent {
       bus: this.bus,
       tasks: this.taskService,
       approvals: this.approvalService,
+      audit: this.audit,
       log,
     };
   }

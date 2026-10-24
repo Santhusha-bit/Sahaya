@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "convex:dev": "convex dev"
+    "convex:dev": "convex dev",
+    "demo:scam": "vite-node --config vitest.config.ts scripts/demo-scam.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

@@ -216,6 +216,7 @@ export interface ToolContext {
   bus: import("./AgentEventBus").AgentEventBus;
   tasks: import("./services").TaskService;
   approvals: import("./services").ApprovalService;
+  audit: import("./audit").AuditLog;
   log: (line: string) => void;
 }
 

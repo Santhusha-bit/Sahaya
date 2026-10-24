@@ -78,10 +78,10 @@ export class GuardianAgent extends BaseAgent {
         toolCalls: [{ name: "requestEmergencyAssistance", input: { situation: message, severity: "high" } }],
       };
     }
-    if (/code|gift ?card|bank|money|scam|suspicious|arrest|irs|grandson|wire/.test(m)) {
+    if (/code|gift ?card|bank|money|scam|suspicious|arrest|irs|grandson|grandma|wire|send|crypto|zelle|ssn|social security/.test(m)) {
       return {
-        reply: "Let me check this message for scam signals before you do anything.",
-        toolCalls: [{ name: "analyzeSuspiciousConversation", input: { content: message, channel: "phone" } }],
+        reply: "Let me check this the safe way before you do anything.",
+        toolCalls: [{ name: "screenInboundMessage", input: { content: message, channel: "phone" } }],
       };
     }
     if (/verify|who they|really my|is this really/.test(m)) {

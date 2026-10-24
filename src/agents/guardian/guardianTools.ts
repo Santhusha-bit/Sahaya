@@ -1,45 +1,30 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
-
-const SCAM_SIGNALS: { pattern: RegExp; flag: string; weight: number }[] = [
-  { pattern: /gift ?card|google play|steam|itunes/i, flag: "Requests payment via gift cards", weight: 3 },
-  { pattern: /wire|western union|zelle|bitcoin|crypto/i, flag: "Requests an irreversible transfer", weight: 3 },
-  { pattern: /\b(otp|one[- ]time|verification code|security code)\b/i, flag: "Asks for a verification/one-time code", weight: 3 },
-  { pattern: /social security|ssn|medicare number|bank account/i, flag: "Asks for sensitive personal numbers", weight: 3 },
-  { pattern: /arrest|warrant|lawsuit|irs|police/i, flag: "Threats of arrest/legal action", weight: 2 },
-  { pattern: /urgent|immediately|right now|act now|final notice/i, flag: "Manufactured urgency", weight: 1 },
-  { pattern: /grandson|grandchild|it'?s me|i'?m in trouble/i, flag: "Possible family-impersonation ('grandparent scam')", weight: 2 },
-  { pattern: /don'?t tell|keep this between|secret/i, flag: "Asks to keep it secret", weight: 2 },
-];
+import { detectSignals } from "./scamSignals";
+import { runScamScreening } from "./scamWorkflow";
 
 export const guardianTools: AgentTool[] = [
   {
     name: "analyzeSuspiciousConversation",
     description:
-      "Analyze a message, call transcript, or request the person received and score how likely it is to be a scam. Call this before advising on anything suspicious.",
+      "Analyze a message, call transcript, or request the person received and score how likely it is to be a scam. Advisory only: it describes the message and never decides what happens. Call this before advising on anything suspicious.",
     inputSchema: z.object({
       content: z.string().min(1).describe("What the suspicious person said or wrote."),
       channel: z.enum(["phone", "text", "email", "in_person", "other"]).optional(),
     }),
     async execute(input, ctx) {
-      let score = 0;
-      const flags: string[] = [];
-      for (const s of SCAM_SIGNALS) {
-        if (s.pattern.test(input.content)) {
-          score += s.weight;
-          flags.push(s.flag);
-        }
-      }
-      const risk = score >= 5 ? "high" : score >= 2 ? "medium" : "low";
+      const analysis = detectSignals(input.content);
+      const flags = analysis.signals.map((s) => s.label);
+      const risk = analysis.risk;
       const rec = await ctx.memory.save("analyses", {
         content: input.content.slice(0, 800),
         channel: input.channel ?? "other",
         risk,
-        score,
+        score: analysis.score,
         flags,
       });
       const advice =
-        risk === "high"
+        risk === "critical" || risk === "high"
           ? "This has strong scam indicators. Do not send money, codes, or personal details. I recommend we notify a trusted contact."
           : risk === "medium"
             ? "This is suspicious. Let's verify who it really is before doing anything they ask."
@@ -47,7 +32,39 @@ export const guardianTools: AgentTool[] = [
       return {
         ok: true,
         summary: `Risk: ${risk.toUpperCase()}${flags.length ? ` (${flags.length} signal(s))` : ""}. ${advice}`,
-        data: { analysisId: rec.id, risk, score, flags },
+        data: { analysisId: rec.id, risk, score: analysis.score, flags },
+      };
+    },
+  },
+  {
+    name: "screenInboundMessage",
+    description:
+      "Run the full Guardian scam workflow on a suspicious inbound message: detect signals, apply the deterministic safety policy, verify through a trusted contact, record an incident, and alert authorized caregivers. Use this for any message that asks for money, gift cards, codes, or personal information.",
+    inputSchema: z.object({
+      content: z.string().min(1).describe("The suspicious message, call transcript, or request, verbatim."),
+      channel: z.enum(["phone", "text", "email", "in_person", "other"]).default("other"),
+      claimant: z.string().optional().describe("Who the sender claims to be, if stated."),
+    }),
+    async execute(input, ctx) {
+      const result = await runScamScreening(
+        { message: input.content, channel: input.channel, claimant: input.claimant },
+        ctx,
+      );
+      const blockedActions = result.incident.policyDecisions
+        .filter((d) => d.effect === "block")
+        .map((d) => d.reason);
+      return {
+        ok: true,
+        summary: result.warning,
+        data: {
+          incidentId: result.incident.id,
+          risk: result.incident.riskLevel,
+          outcome: result.incident.outcome,
+          blocked: result.blocked,
+          blockedActions,
+          verification: result.incident.verification,
+          caregiversAlerted: result.incident.visibility.caregiversAlerted,
+        },
       };
     },
   },
