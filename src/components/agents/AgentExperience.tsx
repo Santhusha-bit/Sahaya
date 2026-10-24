@@ -208,13 +208,24 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
               </div>
             </div>
           </div>
-          <button
-            onClick={() => setVoiceEnabled((v) => !v)}
-            className="btn ml-auto rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/30"
-            aria-pressed={voiceEnabled}
-          >
-            {voiceEnabled ? "🔊 Voice on" : "🔈 Voice off"}
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {meta.id === "wellness" && (
+              <Link
+                href="/wellness"
+                className="btn rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/30"
+                aria-label="Open the Wellness dashboard"
+              >
+                ✨ Dashboard
+              </Link>
+            )}
+            <button
+              onClick={() => setVoiceEnabled((v) => !v)}
+              className="btn rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/30"
+              aria-pressed={voiceEnabled}
+            >
+              {voiceEnabled ? "🔊 Voice on" : "🔈 Voice off"}
+            </button>
+          </div>
         </div>
         <p className="relative mt-2.5 text-[13px] leading-snug text-white/85">{meta.tagline}</p>
       </header>

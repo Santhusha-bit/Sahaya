@@ -61,7 +61,9 @@ export class WellnessAgent extends BaseAgent {
             : "I'm listening. Tell me more about your day.",
       toolCalls: [
         { name: "startConversationalCheckIn", input: {} },
-        { name: "extractWellnessObservations", input: { text: message } },
+        // The full pipeline: Bitdeer extraction -> policy -> Convex -> Moss ->
+        // Backboard -> Tiger Data -> trend -> contextual follow-up.
+        { name: "processWellnessConversation", input: { text: message } },
         { name: "saveWellnessMemory", input: { note: message.slice(0, 200), category: "mood", valence } },
       ],
     };

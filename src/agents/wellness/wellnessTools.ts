@@ -1,8 +1,11 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
 import { extractObservations } from "./extractObservations";
-import { saveObservation } from "./wellnessStore";
+import { activeObservations, correctObservation, deleteObservation, saveObservation } from "./wellnessStore";
 import { readConsent } from "./wellnessConsent";
+import { runWellnessTurn } from "./wellnessWorkflow";
+import { getTimeSeriesProvider } from "@/integrations/tigerdata";
+import { updateHouseholdAnalytics } from "./householdAnalytics";
 
 export const wellnessTools: AgentTool[] = [
   {
@@ -242,6 +245,137 @@ export const wellnessTools: AgentTool[] = [
         data: { eventId: res.event.id, status: res.event.status, consentRef: consent.id },
         error: res.ok ? undefined : res.reason,
       };
+    },
+  },
+  {
+    name: "processWellnessConversation",
+    description:
+      "Run the full wellness turn for what the person just said: extract + validate observations (Bitdeer), store the canonical record (Convex), save continuity (Moss) and historical context (Backboard) if permitted, update the sleep/energy time series (Tiger Data), retrieve the trend, and produce a warm, non-diagnostic follow-up. External failures never corrupt the canonical record.",
+    inputSchema: z.object({ text: z.string().min(1) }),
+    async execute(input, ctx) {
+      const consent = await readConsent(ctx);
+      const result = await runWellnessTurn({
+        text: input.text,
+        memory: ctx.memory,
+        userId: ctx.userId,
+        consent,
+        audit: ctx.audit,
+        correlationId: ctx.correlationId,
+      });
+      const failed = result.syncs.filter((s) => !s.ok);
+      return {
+        ok: true,
+        summary: `${result.followUp}${failed.length ? ` (note: ${failed.length} integration sync(s) failed and were skipped safely)` : ""}`,
+        data: {
+          saved: result.savedCount,
+          duplicates: result.duplicates,
+          accepted: result.extraction.accepted,
+          needsConfirmation: result.extraction.needsConfirmation,
+          rejected: result.extraction.rejected.map((r) => ({ type: r.candidate.type, reason: r.reason, layer: r.layer })),
+          historical: result.historical.map((h) => ({ topic: h.context.topic, summary: h.context.summary })),
+          sleepTrend: result.sleepTrend,
+          energyTrend: result.energyTrend,
+          syncs: result.syncs,
+          followUp: result.followUp,
+        },
+      };
+    },
+  },
+  {
+    name: "reviewRememberedObservations",
+    description: "List what Wellness currently remembers (active observations) so the person can review it. Deleted items are not shown.",
+    inputSchema: z.object({ limit: z.number().int().min(1).max(200).default(50) }),
+    async execute(input, ctx) {
+      const all = await activeObservations(ctx.memory);
+      const items = all.slice(-input.limit).reverse();
+      return {
+        ok: true,
+        summary: items.length ? `You have ${items.length} remembered observation(s).` : "I'm not holding any observations yet.",
+        data: {
+          items: items.map((o) => ({
+            id: o.id,
+            recordId: o.recordId,
+            type: o.type,
+            value: o.value,
+            unit: o.unit,
+            description: o.description,
+            requiresConfirmation: o.requiresConfirmation,
+            evidence: o.evidence,
+            provenance: o.provenance,
+            createdAt: o.createdAt,
+            correctedAt: o.correctedAt,
+          })),
+        },
+      };
+    },
+  },
+  {
+    name: "correctRememberedObservation",
+    description: "Correct a remembered observation in place (the person's words win). Keeps history and provenance; readers only see the corrected value afterward.",
+    inputSchema: z.object({
+      recordId: z.string().min(1),
+      description: z.string().max(200).optional(),
+      value: z.number().optional(),
+      unit: z.enum(["hours", "minutes"]).optional(),
+    }),
+    async execute(input, ctx) {
+      const updated = await correctObservation(
+        ctx.memory,
+        input.recordId,
+        { description: input.description, value: input.value, unit: input.unit },
+        { audit: ctx.audit, correlationId: ctx.correlationId },
+      );
+      if (!updated) return { ok: false, summary: "I couldn't find that to correct.", error: "not_found" };
+      return { ok: true, summary: "Thank you — I've corrected that.", data: { recordId: updated.recordId, version: updated.version } };
+    },
+  },
+  {
+    name: "forgetRememberedObservation",
+    description: "Delete a remembered observation at the person's request. It is removed from everything the person and caregivers see, and from trends and analytics.",
+    inputSchema: z.object({ recordId: z.string().min(1) }),
+    async execute(input, ctx) {
+      const ok = await deleteObservation(ctx.memory, input.recordId, { audit: ctx.audit, correlationId: ctx.correlationId });
+      return ok
+        ? { ok: true, summary: "I've forgotten that, as you asked.", data: { recordId: input.recordId } }
+        : { ok: false, summary: "I couldn't find that to forget.", error: "not_found" };
+    },
+  },
+  {
+    name: "getWellnessTrends",
+    description: "Get the longitudinal sleep and energy trends from the time series (Tiger Data), computed from the canonical active observations.",
+    inputSchema: z.object({}),
+    async execute(_input, ctx) {
+      // Ensure the series reflects current canonical data before reading trends.
+      const consent = await readConsent(ctx);
+      await runWellnessTurn({ text: "", memory: ctx.memory, userId: ctx.userId, consent, audit: ctx.audit, correlationId: ctx.correlationId }).catch(() => {});
+      const ts = getTimeSeriesProvider();
+      const [sleep, energy] = await Promise.all([
+        ts.trend({ userId: ctx.userId, metric: "sleep" }),
+        ts.trend({ userId: ctx.userId, metric: "energy" }),
+      ]);
+      return {
+        ok: true,
+        summary: `Sleep: ${sleep.count} night(s), ${sleep.direction}${sleep.average !== null ? `, avg ${sleep.average}h` : ""}. Energy: ${energy.direction}.`,
+        data: { sleep, energy, backend: ts.backend },
+      };
+    },
+  },
+  {
+    name: "updateHouseholdAnalytics",
+    description:
+      "Publish this month's authorized, de-identified household aggregates (averages and counts only — never raw conversations) to Snowflake, if the person consents. If analytics consent is off, previously published aggregates are withdrawn.",
+    inputSchema: z.object({ period: z.string().regex(/^\d{4}-\d{2}$/).optional() }),
+    async execute(input, ctx) {
+      const consent = await readConsent(ctx);
+      const res = await updateHouseholdAnalytics({
+        memory: ctx.memory,
+        userId: ctx.userId,
+        consent,
+        period: input.period,
+        audit: ctx.audit,
+        correlationId: ctx.correlationId,
+      });
+      return { ok: res.ok, summary: res.detail, data: res };
     },
   },
 ];

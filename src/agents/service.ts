@@ -82,6 +82,22 @@ export class AgentService {
     return { reply, deliveredEvents };
   }
 
+  /**
+   * Run a single named tool on an agent directly (used by agent-specific UIs like
+   * the Wellness dashboard for memory review/correction/deletion). Goes through
+   * the same executeTool path, so validation, approval gates and audit all apply.
+   */
+  async runTool(
+    agentId: AgentId,
+    toolName: string,
+    input: unknown,
+  ): Promise<{ record: ToolCallRecord }> {
+    const agent = await this.build(agentId);
+    const { record } = await agent.executeTool(toolName, input);
+    await this.deliverEvents();
+    return { record };
+  }
+
   /** Approve or reject a pending approval; on approval, execute the deferred tool. */
   async decideApproval(
     agentId: AgentId,
