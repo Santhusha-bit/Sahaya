@@ -64,6 +64,38 @@ export async function llmTurn(opts: {
     messages: opts.messages,
   });
 
+  return toTurn(response);
+}
+
+/**
+ * Streaming variant of llmTurn. Invokes `onText` for each text delta as it
+ * arrives (so the client sees words immediately), then returns the same LlmTurn
+ * once the turn (including any tool_use blocks) is complete.
+ */
+export async function llmTurnStream(opts: {
+  system: string;
+  messages: LlmMessage[];
+  tools: LlmToolSpec[];
+  onText: (delta: string) => void;
+}): Promise<LlmTurn> {
+  const stream = getClient().messages.stream({
+    model: AGENT_MODEL,
+    max_tokens: MAX_TOKENS,
+    system: [
+      { type: "text", text: opts.system, cache_control: { type: "ephemeral" } },
+    ] as unknown as Anthropic.MessageCreateParams["system"],
+    ...(THINKING_ENABLED
+      ? { thinking: { type: "adaptive" } as unknown as Anthropic.ThinkingConfigParam }
+      : {}),
+    tools: opts.tools.length ? (opts.tools as unknown as Anthropic.Tool[]) : undefined,
+    messages: opts.messages,
+  });
+  stream.on("text", (delta) => opts.onText(delta));
+  const response = await stream.finalMessage();
+  return toTurn(response);
+}
+
+function toTurn(response: Anthropic.Message): LlmTurn {
   let text = "";
   const toolUses: LlmToolUse[] = [];
   for (const block of response.content) {
@@ -76,7 +108,6 @@ export async function llmTurn(opts: {
       });
     }
   }
-
   return {
     stopReason: response.stop_reason,
     text,

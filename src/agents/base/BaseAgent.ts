@@ -1,5 +1,5 @@
 import { correlationId as newCorrelationId, id, now } from "@/lib/id";
-import { llmAvailable, llmTurn, type LlmMessage, type LlmToolSpec } from "@/lib/llm";
+import { llmAvailable, llmTurn, llmTurnStream, type LlmMessage, type LlmToolSpec } from "@/lib/llm";
 import { AgentEventBus } from "./AgentEventBus";
 import { AuditLog } from "./audit";
 import type { ConsentSettings } from "./policy";
@@ -302,7 +302,10 @@ export abstract class BaseAgent {
   }
 
   /** prompt §2: processMessage() — the core turn, LLM loop or sandbox planner. */
-  async processMessage(text: string, meta?: { via?: "voice" | "text" }): Promise<AgentReply> {
+  async processMessage(
+    text: string,
+    meta?: { via?: "voice" | "text"; onText?: (delta: string) => void },
+  ): Promise<AgentReply> {
     const correlationId = newCorrelationId();
     const logs: string[] = [];
     const log = (l: string) => logs.push(l);
@@ -321,9 +324,9 @@ export abstract class BaseAgent {
     let finalText = "";
 
     if (llmAvailable()) {
-      finalText = await this.runLlmLoop(text, correlationId, toolCalls, approvalsRequested, log);
+      finalText = await this.runLlmLoop(text, correlationId, toolCalls, approvalsRequested, log, meta?.onText);
     } else {
-      finalText = await this.runSandbox(text, correlationId, toolCalls, approvalsRequested, log);
+      finalText = await this.runSandbox(text, correlationId, toolCalls, approvalsRequested, log, meta?.onText);
     }
 
     await this.data.conversations.append({
@@ -365,13 +368,16 @@ export abstract class BaseAgent {
     toolCalls: ToolCallRecord[],
     approvalsRequested: string[],
     log: (l: string) => void,
+    onText?: (delta: string) => void,
   ): Promise<string> {
     const specs = this.toolSpecs();
     const messages: LlmMessage[] = [...(await this.recentHistory()), { role: "user", content: text }];
     let finalText = "";
 
     for (let i = 0; i < MAX_TOOL_LOOPS; i++) {
-      const turn = await llmTurn({ system: this.config.systemPrompt, messages, tools: specs });
+      const turn = onText
+        ? await llmTurnStream({ system: this.config.systemPrompt, messages, tools: specs, onText })
+        : await llmTurn({ system: this.config.systemPrompt, messages, tools: specs });
       if (turn.text) finalText = turn.text;
       if (!turn.toolUses.length) break;
 
@@ -400,6 +406,7 @@ export abstract class BaseAgent {
     toolCalls: ToolCallRecord[],
     approvalsRequested: string[],
     log: (l: string) => void,
+    onText?: (delta: string) => void,
   ): Promise<string> {
     const ctx = this.buildContext(correlationId, log);
     const plan = await this.sandboxPlan(text, ctx);
@@ -410,8 +417,11 @@ export abstract class BaseAgent {
       if (record.approvalId) approvalsRequested.push(record.approvalId);
       summaries.push(`• ${result.summary}`);
     }
-    if (!summaries.length) return plan.reply;
-    return `${plan.reply}\n\n${summaries.join("\n")}`;
+    const finalText = summaries.length ? `${plan.reply}\n\n${summaries.join("\n")}` : plan.reply;
+    // Sandbox mode is instant; emit the whole reply once so streaming clients
+    // still receive it through the same channel.
+    onText?.(finalText);
+    return finalText;
   }
 }
 

@@ -20,6 +20,34 @@ interface AgentStateResponse {
   inbox: AgentEvent[];
 }
 
+/** Parse one SSE block ("event: x\ndata: {...}") into { event, data }. */
+function parseSSE(block: string): { event: string; data: any } | null {
+  let event = "message";
+  let data = "";
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return null;
+  try {
+    return { event, data: JSON.parse(data) };
+  } catch {
+    return null;
+  }
+}
+
+/** Replace the most recent assistant message (used to fill in streamed tokens). */
+function setLastAssistant(list: ChatMessage[], content: string, toolCalls?: ToolCallRecord[]): ChatMessage[] {
+  const copy = [...list];
+  for (let i = copy.length - 1; i >= 0; i--) {
+    if (copy[i].role === "assistant") {
+      copy[i] = { ...copy[i], content, ...(toolCalls ? { toolCalls } : {}) };
+      break;
+    }
+  }
+  return copy;
+}
+
 export function AgentExperience({ meta }: { meta: AgentMeta }) {
   const Icon = AGENT_ICONS[meta.theme.icon] ?? AGENT_ICONS.shield;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -67,21 +95,52 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
       const trimmed = text.trim();
       if (!trimmed || busy) return;
       setInput("");
-      setMessages((m) => [...m, { role: "user", content: trimmed }]);
+      // Add the user message and an empty assistant bubble to stream into.
+      setMessages((m) => [...m, { role: "user", content: trimmed }, { role: "assistant", content: "" }]);
       setBusy(true);
       try {
         const res = await fetch(`/api/agents/${meta.id}/message`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: trimmed, via }),
+          body: JSON.stringify({ text: trimmed, via, stream: true }),
         });
-        const data = await res.json();
-        const replyText: string = data.reply?.text ?? "Sorry, something went wrong.";
-        setMessages((m) => [...m, { role: "assistant", content: replyText, toolCalls: data.reply?.toolCalls }]);
-        applyState(data);
-        if (voiceEnabled) void speak(replyText);
+        if (!res.ok || !res.body) throw new Error("no stream");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let full = "";
+        let finalData: any = null;
+        let finished = false;
+
+        while (!finished) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let idx: number;
+          while ((idx = buf.indexOf("\n\n")) >= 0) {
+            const block = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            const ev = parseSSE(block);
+            if (!ev) continue;
+            if (ev.event === "token") {
+              full += ev.data.t ?? "";
+              setMessages((m) => setLastAssistant(m, full));
+            } else if (ev.event === "done") {
+              finalData = ev.data;
+              finished = true;
+            } else if (ev.event === "error") {
+              throw new Error(ev.data?.message ?? "stream error");
+            }
+          }
+        }
+
+        const replyText: string = finalData?.reply?.text ?? full ?? "";
+        setMessages((m) => setLastAssistant(m, replyText || "Done.", finalData?.reply?.toolCalls));
+        if (finalData) applyState(finalData);
+        if (voiceEnabled && replyText) void speak(replyText);
       } catch {
-        setMessages((m) => [...m, { role: "assistant", content: "I couldn't reach the server just now. Please try again." }]);
+        setMessages((m) => setLastAssistant(m, "I couldn't reach the server just now. Please try again."));
       } finally {
         setBusy(false);
       }
@@ -209,7 +268,7 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
                     : { background: "#fff", border: "1px solid var(--line)", borderBottomLeftRadius: 6 }
                 }
               >
-                {m.content}
+                {m.content || (m.role === "assistant" ? "…" : "")}
                 {m.toolCalls && m.toolCalls.length > 0 && (
                   <div className="mt-2 flex flex-col gap-1 border-t border-black/5 pt-2">
                     {m.toolCalls.map((c) => (
@@ -222,11 +281,6 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
               </div>
             </div>
           ))}
-          {busy && (
-            <div className="flex justify-start">
-              <div className="rounded-2xl border border-[var(--line)] bg-white px-4 py-2.5 text-[var(--muted)]">…</div>
-            </div>
-          )}
         </div>
 
         {/* Suggestions */}

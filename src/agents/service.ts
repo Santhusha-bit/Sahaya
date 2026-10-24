@@ -69,6 +69,19 @@ export class AgentService {
     return { reply, deliveredEvents };
   }
 
+  /** Like sendMessage, but streams the reply text via onToken as it is generated. */
+  async streamMessage(
+    agentId: AgentId,
+    text: string,
+    via: "voice" | "text",
+    onToken: (delta: string) => void,
+  ): Promise<{ reply: AgentReply; deliveredEvents: AgentEvent[] }> {
+    const agent = await this.build(agentId);
+    const reply = await agent.processMessage(text, { via, onText: onToken });
+    const deliveredEvents = await this.deliverEvents();
+    return { reply, deliveredEvents };
+  }
+
   /** Approve or reject a pending approval; on approval, execute the deferred tool. */
   async decideApproval(
     agentId: AgentId,
