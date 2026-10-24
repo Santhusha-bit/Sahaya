@@ -34,9 +34,15 @@ export function llmAvailable(): boolean {
   return isClaudeLive();
 }
 
+// Latency controls. Defaults favor a fast, responsive UX (short replies, no
+// extended thinking) because security is enforced deterministically in code, not
+// by the model. Set AGENT_THINKING=adaptive to re-enable thinking (slower).
+const MAX_TOKENS = Math.max(256, Number(process.env.AGENT_MAX_TOKENS ?? 800));
+const THINKING_ENABLED = process.env.AGENT_THINKING === "adaptive";
+
 /**
- * Run a single Claude turn (used inside the agent runtime's tool loop).
- * Uses adaptive thinking per the Opus 4.8 guidance.
+ * Run a single Claude turn (used inside the agent runtime's tool loop). Tuned for
+ * low latency: a fast model, a tight output budget, and thinking off by default.
  */
 export async function llmTurn(opts: {
   system: string;
@@ -45,10 +51,15 @@ export async function llmTurn(opts: {
 }): Promise<LlmTurn> {
   const response = await getClient().messages.create({
     model: AGENT_MODEL,
-    max_tokens: 4096,
-    system: opts.system,
-    // Adaptive thinking per Opus 4.8 guidance (cast: SDK types lag the API).
-    thinking: { type: "adaptive" } as unknown as Anthropic.ThinkingConfigParam,
+    max_tokens: MAX_TOKENS,
+    // Cache the large, stable system prompt so turns after the first (and repeat
+    // requests within the cache window) skip reprocessing it — lower latency.
+    system: [
+      { type: "text", text: opts.system, cache_control: { type: "ephemeral" } },
+    ] as unknown as Anthropic.MessageCreateParams["system"],
+    ...(THINKING_ENABLED
+      ? { thinking: { type: "adaptive" } as unknown as Anthropic.ThinkingConfigParam }
+      : {}),
     tools: opts.tools.length ? (opts.tools as unknown as Anthropic.Tool[]) : undefined,
     messages: opts.messages,
   });
