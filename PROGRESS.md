@@ -51,8 +51,31 @@ from the repo root.
 - Armadin shown as `unavailable` on the status page (no sponsor API); the suite is
   a local, honest adversarial harness.
 
-## Track 3 — Controlled agent actions (Jira-style) ⏳ next
-## Track 4 — Elastic incident search ⏳ todo
+## Track 3 — Controlled agent actions (Jira-style) ✅ done
+- `src/agents/base/workItems.ts` — WorkItem model (requested action, requesting +
+  assigned agent, permission scope, input hash, status requested/in_review/approved/
+  rejected/executed/expired, reviewer, timestamps, result, single-use flag, full
+  history). `WorkItemStore` interface + `SandboxWorkItemStore`. `WorkItemService`
+  lifecycle. `evaluateGate` is the pure, deterministic execution gate.
+- Gate enforces ALL of: locally approved, assigned agent, matching tool, matching
+  input hash, required reviewer role, not expired, single-use. A synced/external
+  "approved" status alone is explicitly rejected (`no_reviewer`).
+- `src/integrations/jira.ts` — `JiraWorkItemStore` (same interface) mirrors work
+  items to Jira issues (REST v3) for human review; idempotent via the issue key.
+  Security-critical state stays in the local mirror and the code gate. Live only
+  with ATLASSIAN_* creds; otherwise sandbox. `createWorkItemStore()` picks honestly.
+- `jiraStatus()` added to the status page (sandbox without creds).
+- Tests: `tests/workItems.test.ts` (9) prove: no-approval, tampered input, expired,
+  wrong reviewer role, replayed (single-use), wrong agent, and approved-status-alone
+  all fail; the valid path executes exactly once.
+- Demo: `npm run demo:approval` (Finance proposes $2,000 → caregiver approves →
+  gate executes once; history view printed).
+
+NOTE: the live Jira path is unverified (no Atlassian credentials supplied); it is
+written against Jira Cloud REST API v3 and guarded so it never affects the local
+gate. Falls back to the fully-tested sandbox store.
+
+## Track 4 — Elastic incident search ⏳ next
 ## Track 5 — Fetch.ai agent-to-agent messaging ⏳ todo
 
 ## Missing credentials / unfinished

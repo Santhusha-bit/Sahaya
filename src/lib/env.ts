@@ -67,6 +67,18 @@ export function auth0Status(): IntegrationStatus {
   };
 }
 
+export function jiraStatus(): IntegrationStatus {
+  const live = has("ATLASSIAN_SITE") && has("ATLASSIAN_EMAIL") && has("ATLASSIAN_API_TOKEN") && has("ATLASSIAN_PROJECT_KEY");
+  return {
+    key: "jira",
+    label: "Atlassian Jira (controlled actions)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live — sensitive actions mirror to Jira issues for human review."
+      : "Sandbox — work items use a local reviewable store with the same interface and dashboard.",
+  };
+}
+
 export function armadinStatus(): IntegrationStatus {
   const live = has("ARMADIN_API_KEY");
   return {
@@ -97,6 +109,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     convexStatus(),
     cartesiaStatus(),
     auth0Status(),
+    jiraStatus(),
     armadinStatus(),
     mossStatus(),
   ];
