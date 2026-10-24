@@ -29,6 +29,11 @@ next-env.d.ts
 # generated reports
 redteam-report.md
 
+# python bridge
+__pycache__/
+*.pyc
+services/uagents/.venv/
+
 # logs
 npm-debug.log*
 yarn-debug.log*

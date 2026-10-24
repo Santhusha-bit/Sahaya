@@ -16,7 +16,8 @@
     "demo:scam": "vite-node --config vitest.config.ts scripts/demo-scam.ts",
     "redteam": "vite-node --config vitest.config.ts scripts/redteam.ts",
     "demo:approval": "vite-node --config vitest.config.ts scripts/demo-approval.ts",
-    "demo:search": "vite-node --config vitest.config.ts scripts/demo-search.ts"
+    "demo:search": "vite-node --config vitest.config.ts scripts/demo-search.ts",
+    "demo:agents": "vite-node --config vitest.config.ts scripts/demo-agents.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

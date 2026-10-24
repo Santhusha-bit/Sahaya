@@ -39,6 +39,12 @@ export class WellnessAgent extends BaseAgent {
         toolCalls: [{ name: "escalateSafetyToGuardian", input: { summary: message, severity: "high" } }],
       };
     }
+    if (/no ?one to help|nobody to help|don'?t have anyone|no one can help|help me get groceries|need someone to/.test(m)) {
+      return {
+        reply: "You shouldn't have to manage that alone. Let me ask Guardian to arrange someone to help you.",
+        toolCalls: [{ name: "requestHumanAssistance", input: { need: message.slice(0, 280), urgency: "soon" } }],
+      };
+    }
     if (/can'?t cook|can'?t prepare|hard to make|no food|can'?t get groceries|too tired to cook/.test(m)) {
       return {
         reply: "Thank you for telling me. Let me ask Care to help with meals so you don't have to worry about it.",

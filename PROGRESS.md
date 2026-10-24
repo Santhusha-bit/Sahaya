@@ -90,9 +90,45 @@ gate. Falls back to the fully-tested sandbox store.
   with cited ids, permission scoping, freshly-screened incident becomes searchable.
 - Demo: `npm run demo:search` (top match for the Margaret message + 2 more queries).
 
-## Track 5 — Fetch.ai agent-to-agent messaging ⏳ next
+## Track 5 — Fetch.ai agent-to-agent messaging ✅ done
+- `services/uagents/` — Python bridge: two real uAgents (wellness + guardian) in a
+  Bureau exchanging typed `AssistanceRequest` / `AssistanceResponse` messages;
+  wellness exposes `POST /assistance` (on_rest_post) and forwards to guardian via
+  `ctx.send`; guardian accepts and replies; response correlated by `request_id`.
+  `messages.py`, `bridge.py`, `requirements.txt` (uagents==0.26.1), README.
+- `src/integrations/fetchai.ts` — typed Zod schemas; `AssistanceBridge` interface
+  with `SandboxBridge` (in-process bus, same validation + consent) and
+  `FetchAIBridge` (HTTP to the Python service). `requestAssistance` orchestration.
+  Only the declared wellness→guardian `assistance.request` event crosses; minimum
+  data only (need, urgency, consentRef).
+- New declared cross-agent rule + consent key `wellnessToGuardianAssist`; Wellness
+  `requestHumanAssistance` tool and planner route for "no one to help".
+- `fetchaiStatus()` on the status page.
+- Tests: `tests/agentBridge.test.ts` (7) — schema validation, no-consent rejection,
+  consent-off rejection, response matches request id, narrow payload only, Wellness
+  orchestration + planner routing.
+- Demo: `npm run demo:agents`.
+
+VERIFIED LIVE: on this machine (Python 3.13.6), `pip install uagents==0.26.1`
+succeeded, the Bureau started both agents, and a real `POST /assistance` returned
+`{status: accepted, task_id, request_id}` correlated to the request — confirming
+genuine agent-to-agent messaging. The app still defaults to the in-process sandbox
+and only switches to the live path when `FETCHAI_BRIDGE_URL` is set (shown honestly
+on the status page).
+
+## Definition of done
+- All five demos run end to end: `demo:scam`, `redteam`, `demo:approval`,
+  `demo:search`, `demo:agents` (all pass with non-zero exit on failure).
+- Integration statuses are honest on the status page: Claude (live/sandbox),
+  Convex (live/sandbox), Jira (live/sandbox), Elastic (live/sandbox), Fetch.ai
+  (live/unavailable), Armadin (unavailable), plus Cartesia/Auth0/Moss.
+- Tests pass: 55 across 9 files. `npm run typecheck` and `npm run build` green.
 
 ## Missing credentials / unfinished
-- No sponsor credentials provided yet (Armadin, Atlassian/Jira, Elastic, Fetch.ai).
-  Each track ships a sandbox implementation behind an interface and is labeled
-  honestly; live adapters activate when credentials are supplied.
+- No sponsor credentials supplied for Armadin, Atlassian/Jira, or Elastic; those
+  run in sandbox/unavailable mode behind their interfaces and activate when creds
+  are added. Fetch.ai's live path is verified locally (Python); it is off by
+  default and enabled via `FETCHAI_BRIDGE_URL`.
+- `npm run lint` is not configured in this repo (no ESLint setup); `npm run
+  typecheck` covers static checking.
+- The Jira live REST path is written to spec but unverified (no Atlassian creds).

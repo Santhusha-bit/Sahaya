@@ -67,6 +67,18 @@ export function auth0Status(): IntegrationStatus {
   };
 }
 
+export function fetchaiStatus(): IntegrationStatus {
+  const live = has("FETCHAI_BRIDGE_URL");
+  return {
+    key: "fetchai",
+    label: "Fetch.ai uAgents (agent messaging)",
+    mode: live ? "live" : "unavailable",
+    detail: live
+      ? "Live — typed messages exchanged with the Python uAgents bridge over local HTTP."
+      : "Unavailable — Python/uAgents bridge not configured; agent-to-agent messaging runs on the in-process bus (not labeled Fetch.ai).",
+  };
+}
+
 export function elasticStatus(): IntegrationStatus {
   const live = has("ELASTIC_URL") && has("ELASTIC_API_KEY");
   return {
@@ -123,6 +135,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     auth0Status(),
     jiraStatus(),
     elasticStatus(),
+    fetchaiStatus(),
     armadinStatus(),
     mossStatus(),
   ];

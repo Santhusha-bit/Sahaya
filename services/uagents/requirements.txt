@@ -1,0 +1,2 @@
+# Fetch.ai uAgents bridge (Track 5). Pinned to the version verified in the docs.
+uagents==0.26.1

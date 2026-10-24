@@ -186,4 +186,36 @@ export const wellnessTools: AgentTool[] = [
       };
     },
   },
+  {
+    name: "requestHumanAssistance",
+    description:
+      "Ask Guardian to coordinate a human helper (e.g. for groceries) when the person says they have no one to help. Authorized cross-agent workflow carried over the Fetch.ai bridge; records the person's consent first and sends only the minimum needed.",
+    inputSchema: z.object({
+      need: z.string().min(1).max(300),
+      urgency: z.enum(["routine", "soon", "urgent"]).default("soon"),
+    }),
+    async execute(input, ctx) {
+      const consent = await ctx.memory.save(
+        "consents",
+        { purpose: "human_assistance", need: input.need, grantedAt: Date.now() },
+        { tags: ["consent"] },
+      );
+      const res = await ctx.bus.publish({
+        sourceAgent: "wellness",
+        targetAgent: "guardian",
+        type: "assistance.request",
+        userId: ctx.userId,
+        correlationId: ctx.correlationId,
+        payload: { need: input.need, urgency: input.urgency, consentRef: consent.id },
+      });
+      return {
+        ok: res.ok,
+        summary: res.ok
+          ? "I've asked Guardian to help arrange a person to assist you, and they're coordinating it now."
+          : `Could not reach Guardian: ${res.reason}`,
+        data: { eventId: res.event.id, status: res.event.status, consentRef: consent.id },
+        error: res.ok ? undefined : res.reason,
+      };
+    },
+  },
 ];

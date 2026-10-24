@@ -65,6 +65,12 @@ const careAssistRequest = z.object({
   note: z.string().max(300),
 });
 
+const bridgedAssistanceRequest = z.object({
+  need: z.string().max(300),
+  urgency: z.enum(["routine", "soon", "urgent"]),
+  consentRef: z.string().min(1).max(80),
+});
+
 export const CROSS_AGENT_RULES: CrossAgentRule[] = [
   {
     source: "wellness",
@@ -98,6 +104,14 @@ export const CROSS_AGENT_RULES: CrossAgentRule[] = [
     consentKey: "wellnessToCare",
     description: "Wellness asks Care for meal/grocery help after a check-in.",
   },
+  {
+    source: "wellness",
+    target: "guardian",
+    type: "assistance.request",
+    payload: bridgedAssistanceRequest,
+    consentKey: "wellnessToGuardianAssist",
+    description: "Wellness asks Guardian to coordinate human assistance (e.g. groceries), carried over the Fetch.ai bridge.",
+  },
 ];
 
 export function findRule(source: AgentId, target: AgentId, type: string): CrossAgentRule | undefined {
@@ -114,6 +128,7 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   careToGuardian: true,
   careToFinance: true,
   wellnessToCare: true,
+  wellnessToGuardianAssist: true,
   /** Whether caregivers may see each agent's activity on the Family dashboard. */
   caregiverGuardian: true,
   caregiverCare: true,
