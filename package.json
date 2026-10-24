@@ -1,0 +1,37 @@
+{
+  "name": "kinline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kinline — four independent AI agents for elder care, in one installable PWA.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "convex:dev": "convex dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "convex": "^1.17.4",
+    "next": "^15.5.28",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
