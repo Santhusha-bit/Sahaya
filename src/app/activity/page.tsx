@@ -30,33 +30,51 @@ export default function ActivityPage() {
   }, []);
 
   return (
-    <main className="px-5 pt-10">
-      <h1 className="text-[26px] font-bold">Activity</h1>
-      <p className="mt-1 text-[15px] text-[var(--muted)]">
+    <main className="px-5 pt-8">
+      <h1 className="text-[28px] font-extrabold tracking-tight">Activity</h1>
+      <p className="mt-1.5 text-[15px] leading-relaxed text-[var(--muted)]">
         Every cross-agent request, and whether it was authorized. This is the audit trail of agent collaboration.
       </p>
 
-      {loading && <p className="mt-6 text-[var(--muted)]">Loading…</p>}
+      {loading && (
+        <section className="mt-6 flex flex-col gap-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="card p-4">
+              <div className="skeleton h-4 w-1/2" />
+              <div className="skeleton mt-2 h-3 w-3/4" />
+            </div>
+          ))}
+        </section>
+      )}
       {!loading && events.length === 0 && (
-        <p className="mt-6 text-[var(--muted)]">No cross-agent events yet. Try asking Wellness something urgent, or ordering groceries with Care.</p>
+        <div className="card mt-6 p-6 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--brand-soft)] text-[22px]">🔗</div>
+          <p className="text-[14px] leading-relaxed text-[var(--muted)]">
+            No cross-agent events yet. Try asking Wellness something urgent, or ordering groceries with Care.
+          </p>
+        </div>
       )}
 
       <section className="mt-5 flex flex-col gap-3">
-        {events.map((e) => {
+        {events.map((e, i) => {
           const s = STATUS_STYLE[e.status] ?? STATUS_STYLE.pending;
           return (
-            <div key={e.id} className="card fade-up p-4">
-              <div className="flex items-center gap-2 text-[13px] font-semibold">
-                <span style={{ color: AGENT_COLOR[e.sourceAgent] }}>{e.sourceAgent}</span>
-                <span className="text-[var(--muted)]">→</span>
-                <span style={{ color: AGENT_COLOR[e.targetAgent] }}>{e.targetAgent}</span>
-                <span className="pill ml-auto px-2 py-0.5 text-[11px] font-semibold" style={{ background: s.bg, color: s.color }}>
+            <div key={e.id} className={`card card-interactive fade-up stagger-${Math.min(i + 1, 4)} p-4`}>
+              <div className="flex items-center gap-2 text-[13px] font-bold">
+                <span className="pill px-2 py-0.5 text-[12px]" style={{ background: `${AGENT_COLOR[e.sourceAgent]}18`, color: AGENT_COLOR[e.sourceAgent] }}>
+                  {e.sourceAgent}
+                </span>
+                <span className="text-[var(--faint)]">→</span>
+                <span className="pill px-2 py-0.5 text-[12px]" style={{ background: `${AGENT_COLOR[e.targetAgent]}18`, color: AGENT_COLOR[e.targetAgent] }}>
+                  {e.targetAgent}
+                </span>
+                <span className="pill ml-auto px-2.5 py-0.5 text-[11px] font-bold" style={{ background: s.bg, color: s.color }}>
                   {s.label}
                 </span>
               </div>
-              <div className="mt-1 text-[14px]">{e.type}</div>
-              {e.reason && <div className="mt-1 text-[12px] text-[var(--muted)]">{e.reason}</div>}
-              <div className="mt-1 text-[11px] text-[var(--muted)]">
+              <div className="mt-2 text-[14px] font-medium">{e.type}</div>
+              {e.reason && <div className="mt-1 text-[12px] leading-snug text-[var(--muted)]">{e.reason}</div>}
+              <div className="mt-2 text-[11px] text-[var(--faint)]">
                 {new Date(e.createdAt).toLocaleString()} · corr {e.correlationId.slice(0, 10)}
               </div>
             </div>

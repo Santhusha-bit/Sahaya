@@ -1,11 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f6f7fb;
+  /* Surfaces */
+  --bg: #f4f5fb;
+  --bg-tint: #eef0f9;
   --surface: #ffffff;
-  --ink: #1a1f36;
-  --muted: #5b6478;
-  --line: #e6e8f0;
+  --surface-2: #fafbff;
+
+  /* Ink + text */
+  --ink: #141829;
+  --muted: #5d6478;
+  --faint: #8a90a6;
+
+  /* Lines */
+  --line: #e9ebf4;
+  --line-strong: #dcdfee;
+
+  /* Brand */
+  --brand: #4f46e5;
+  --brand-ink: #3730a3;
+  --brand-soft: #e8e7fd;
+  --brand-grad: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%);
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(20, 24, 41, 0.04), 0 1px 3px rgba(20, 24, 41, 0.06);
+  --shadow-md: 0 2px 8px rgba(20, 24, 41, 0.06), 0 8px 24px rgba(20, 24, 41, 0.07);
+  --shadow-lg: 0 8px 20px rgba(20, 24, 41, 0.08), 0 24px 48px rgba(20, 24, 41, 0.12);
+  --shadow-brand: 0 8px 24px rgba(79, 70, 229, 0.28);
 }
 
 @theme {
@@ -20,27 +41,46 @@ body {
   /* Elder-friendly base size and line height. */
   font-size: 17px;
   line-height: 1.5;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Mobile app shell */
+/* Mobile app shell with an ambient, layered background. */
 .app-shell {
   max-width: 480px;
   margin: 0 auto;
   min-height: 100dvh;
-  background: var(--bg);
   position: relative;
-  padding-bottom: 86px;
+  padding-bottom: 104px;
+  background:
+    radial-gradient(120% 60% at 80% -10%, rgba(124, 58, 237, 0.1), transparent 60%),
+    radial-gradient(90% 50% at -10% 0%, rgba(99, 102, 241, 0.1), transparent 55%),
+    var(--bg);
+  box-shadow: 0 0 80px rgba(20, 24, 41, 0.04);
 }
 
+/* Cards: elevated, crisp, with a hairline border for definition. */
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.card-interactive {
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.card-interactive:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.card-interactive:active {
+  transform: translateY(0) scale(0.99);
 }
 
 .pill {
@@ -50,10 +90,45 @@ body {
 .btn {
   border-radius: 14px;
   font-weight: 600;
-  transition: transform 0.06s ease, opacity 0.15s ease;
+  transition: transform 0.08s ease, opacity 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 .btn:active {
   transform: scale(0.97);
+}
+
+/* Section eyebrow label */
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* Subtle live/status dot */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.35);
+  animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
 }
 
 .scroll-hide::-webkit-scrollbar {
@@ -81,7 +156,7 @@ body {
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -89,5 +164,40 @@ body {
   }
 }
 .fade-up {
-  animation: fade-up 0.2s ease both;
+  animation: fade-up 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Staggered entrance helpers */
+.stagger-1 { animation-delay: 0.04s; }
+.stagger-2 { animation-delay: 0.08s; }
+.stagger-3 { animation-delay: 0.12s; }
+.stagger-4 { animation-delay: 0.16s; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #eef0f7 25%, #f6f7fb 50%, #eef0f7 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 12px;
+}
+
+/* Typing indicator dots */
+.typing span {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 1.5px;
+  border-radius: 999px;
+  background: var(--faint);
+  animation: typing 1.2s infinite ease-in-out;
+}
+.typing span:nth-child(2) { animation-delay: 0.18s; }
+.typing span:nth-child(3) { animation-delay: 0.36s; }
+
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
 }
