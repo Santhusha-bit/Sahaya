@@ -117,6 +117,28 @@ export function XIcon(p: IconProps) {
     </svg>
   );
 }
+export function ChevronRightIcon(p: IconProps) {
+  return (
+    <svg {...base(p)}>
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+export function ChevronLeftIcon(p: IconProps) {
+  return (
+    <svg {...base(p)}>
+      <path d="M15 6l-6 6 6 6" />
+    </svg>
+  );
+}
+export function ShieldCheckIcon(p: IconProps) {
+  return (
+    <svg {...base(p)}>
+      <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
 
 export const AGENT_ICONS: Record<string, (p: IconProps) => React.JSX.Element> = {
   shield: ShieldIcon,
