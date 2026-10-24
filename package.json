@@ -18,7 +18,14 @@
     "demo:approval": "vite-node --config vitest.config.ts scripts/demo-approval.ts",
     "demo:search": "vite-node --config vitest.config.ts scripts/demo-search.ts",
     "demo:agents": "vite-node --config vitest.config.ts scripts/demo-agents.ts",
-    "serve:guardian": "vite-node --config vitest.config.ts scripts/serve-guardian.ts"
+    "serve:guardian": "vite-node --config vitest.config.ts scripts/serve-guardian.ts",
+    "demo:bitdeer": "vite-node --config vitest.config.ts scripts/demo-bitdeer.ts",
+    "demo:wellness-memory": "vite-node --config vitest.config.ts scripts/demo-wellness-memory.ts",
+    "demo:backboard": "vite-node --config vitest.config.ts scripts/demo-backboard.ts",
+    "demo:tigerdata": "vite-node --config vitest.config.ts scripts/demo-tigerdata.ts",
+    "demo:snowflake": "vite-node --config vitest.config.ts scripts/demo-snowflake.ts",
+    "demo:wellness-full": "vite-node --config vitest.config.ts scripts/demo-wellness-full.ts",
+    "redteam:wellness": "vite-node --config vitest.config.ts scripts/redteam-wellness.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

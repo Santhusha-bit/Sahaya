@@ -18,6 +18,7 @@ function has(name: string): boolean {
 }
 
 export const AGENT_MODEL = process.env.AGENT_MODEL?.trim() || "claude-opus-4-8";
+export const AGENT_BITDEER_MODEL = process.env.BITDEER_MODEL?.trim() || "deepseek-ai/DeepSeek-V4-Flash";
 
 export function claudeStatus(): IntegrationStatus {
   const live = has("ANTHROPIC_API_KEY");
@@ -132,10 +133,58 @@ export function mossStatus(): IntegrationStatus {
   return {
     key: "moss",
     label: "Moss (personal memory)",
-    mode: live ? "live" : "unavailable",
+    mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — Moss memory provider."
-      : "Unavailable — long-term memory is served by the Convex/in-process store instead.",
+      ? "Live — Moss personal-memory provider stores Wellness continuity context."
+      : "Sandbox — Wellness continuity memory is served by the Convex/in-process store with the same interface.",
+  };
+}
+
+export function bitdeerStatus(): IntegrationStatus {
+  const live = has("BITDEER_API_KEY");
+  return {
+    key: "bitdeer",
+    label: "Bitdeer AI Model Studio (observation extraction)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? `Live — structured wellness-observation extraction via Bitdeer (${AGENT_BITDEER_MODEL}). Output is schema-validated and evidence-checked in code before use.`
+      : "Sandbox — a deterministic offline extractor with the same interface proposes observations; the same strict validation + evidence grounding applies.",
+  };
+}
+
+export function backboardStatus(): IntegrationStatus {
+  const live = has("BACKBOARD_API_KEY");
+  return {
+    key: "backboard",
+    label: "Backboard (historical context memory)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live — relevant historical conversation context retrieved from Backboard."
+      : "Sandbox — historical context is retrieved from the Convex/in-process store with the same interface.",
+  };
+}
+
+export function tigerDataStatus(): IntegrationStatus {
+  const live = has("TIGERDATA_URL") && has("TIGERDATA_API_KEY");
+  return {
+    key: "tigerdata",
+    label: "Tiger Data (wellness time series)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live — sleep/energy time series stored and trended in Tiger Data (TimescaleDB)."
+      : "Sandbox — a local time-series store with the same interface computes longitudinal trends.",
+  };
+}
+
+export function snowflakeStatus(): IntegrationStatus {
+  const live = has("SNOWFLAKE_ACCOUNT") && has("SNOWFLAKE_TOKEN");
+  return {
+    key: "snowflake",
+    label: "Snowflake (household analytics)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live — authorized, consented household aggregates are available to Snowflake."
+      : "Sandbox — authorized household aggregates are computed locally with the same interface; nothing leaves the device.",
   };
 }
 
@@ -151,6 +200,23 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     twilioStatus(),
     armadinStatus(),
     mossStatus(),
+    bitdeerStatus(),
+    backboardStatus(),
+    tigerDataStatus(),
+    snowflakeStatus(),
+  ];
+}
+
+/** Integrations most relevant to the Wellness agent, for its dashboard. */
+export function wellnessIntegrationStatuses(): IntegrationStatus[] {
+  return [
+    claudeStatus(),
+    bitdeerStatus(),
+    convexStatus(),
+    mossStatus(),
+    backboardStatus(),
+    tigerDataStatus(),
+    snowflakeStatus(),
   ];
 }
 

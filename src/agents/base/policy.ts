@@ -134,4 +134,13 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   caregiverCare: true,
   caregiverWellness: true,
   caregiverFinance: true,
+  // --- Wellness (Part 5) ---
+  /** Send minimized wellness text to the EXTERNAL Bitdeer model for extraction. */
+  wellnessExternalProcessing: true,
+  /** Store/retrieve Wellness continuity + historical context (Moss/Backboard). */
+  wellnessMemory: true,
+  /** Contribute authorized, de-identified aggregates to household analytics (Snowflake). */
+  wellnessHouseholdAnalytics: true,
+  /** Caregivers may view RAW wellness conversations (off by default — aggregates only). */
+  caregiverWellnessRaw: false,
 };

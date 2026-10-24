@@ -1,16 +1,8 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
-
-const SIGNALS: { key: string; pattern: RegExp; valence: "positive" | "negative" | "neutral" }[] = [
-  { key: "sleep_poor", pattern: /can'?t sleep|trouble sleeping|awake all night|insomnia|tired/i, valence: "negative" },
-  { key: "sleep_good", pattern: /slept well|good sleep|rested/i, valence: "positive" },
-  { key: "mood_low", pattern: /sad|lonely|down|blue|depressed|cry|hopeless/i, valence: "negative" },
-  { key: "mood_good", pattern: /happy|good day|cheerful|enjoyed|grateful/i, valence: "positive" },
-  { key: "pain", pattern: /pain|hurts|ache|sore/i, valence: "negative" },
-  { key: "appetite_low", pattern: /not eating|no appetite|skipped meal|not hungry/i, valence: "negative" },
-  { key: "social", pattern: /visit|called|saw|friend|family|grandkid|church|neighbor/i, valence: "positive" },
-  { key: "isolation", pattern: /alone|nobody|no one|isolated|haven'?t seen anyone/i, valence: "negative" },
-];
+import { extractObservations } from "./extractObservations";
+import { saveObservation } from "./wellnessStore";
+import { readConsent } from "./wellnessConsent";
 
 export const wellnessTools: AgentTool[] = [
   {
@@ -33,17 +25,51 @@ export const wellnessTools: AgentTool[] = [
   },
   {
     name: "extractWellnessObservations",
-    description: "Extract mood, sleep, pain, appetite and social signals from what the person said.",
+    description:
+      "Extract structured wellness observations (sleep, energy, mood, appetite, pain, social) from what the person said, using the Bitdeer inference provider when configured. Output is schema-validated and evidence-checked in code; invented numbers, diagnoses and medication advice are rejected. Accepted observations are saved to the canonical record with model provenance.",
     inputSchema: z.object({ text: z.string().min(1) }),
-    async execute(input) {
-      const observations = SIGNALS.filter((s) => s.pattern.test(input.text)).map((s) => ({ signal: s.key, valence: s.valence }));
-      const concern = observations.some((o) => o.valence === "negative");
+    async execute(input, ctx) {
+      const consent = await readConsent(ctx);
+      const result = await extractObservations({
+        text: input.text,
+        consent,
+        audit: ctx.audit,
+        correlationId: ctx.correlationId,
+      });
+
+      // Persist accepted observations (deduped) to the canonical store.
+      const savedIds: string[] = [];
+      let duplicates = 0;
+      for (const obs of result.accepted) {
+        const { stored, duplicate } = await saveObservation(ctx.memory, obs, {
+          audit: ctx.audit,
+          correlationId: ctx.correlationId,
+        });
+        if (duplicate) duplicates++;
+        else savedIds.push(stored.recordId);
+      }
+
+      const acc = result.accepted.map((o) =>
+        o.value !== undefined ? `${o.type}=${o.value}${o.unit ?? ""}` : `${o.type} (${o.description})`,
+      );
+      const summaryParts: string[] = [];
+      if (acc.length) summaryParts.push(`Noted: ${acc.join(", ")}.`);
+      if (result.needsConfirmation.length) summaryParts.push(`${result.needsConfirmation.length} to confirm.`);
+      if (result.rejected.length) summaryParts.push(`${result.rejected.length} unsupported candidate(s) rejected.`);
+      if (!summaryParts.length) summaryParts.push("No clear well-being observations in that message.");
+
       return {
         ok: true,
-        summary: observations.length
-          ? `Noticed: ${observations.map((o) => o.signal).join(", ")}.`
-          : "No strong well-being signals in that message.",
-        data: { observations, concern },
+        summary: summaryParts.join(" "),
+        data: {
+          accepted: result.accepted,
+          needsConfirmation: result.needsConfirmation,
+          rejected: result.rejected.map((r) => ({ type: r.candidate.type, reason: r.reason, layer: r.layer })),
+          savedIds,
+          duplicates,
+          provenance: result.provenance,
+          concern: result.accepted.some((o) => ["mood", "sleep_quality", "pain", "appetite"].includes(o.type)),
+        },
       };
     },
   },
