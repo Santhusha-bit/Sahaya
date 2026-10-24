@@ -73,6 +73,16 @@ export abstract class BaseAgent {
   /** Optional one-time demo seeding. */
   protected async seed(): Promise<void> {}
 
+  /**
+   * Optional hot-path optimization. If it returns tool calls, the runtime runs
+   * them deterministically FIRST, then makes a SINGLE streaming model call to
+   * phrase the reply — avoiding slow model-driven tool round trips. Return null
+   * to use the normal LLM tool loop. (Only used on the live-LLM path.)
+   */
+  protected fastPath(_message: string): { name: string; input: Record<string, unknown> }[] | null {
+    return null;
+  }
+
   readonly userId: string;
   private readonly data: DataLayer;
   private readonly consent: ConsentSettings;
@@ -370,6 +380,12 @@ export abstract class BaseAgent {
     log: (l: string) => void,
     onText?: (delta: string) => void,
   ): Promise<string> {
+    // Hot path: run the deterministic tool plan up front, then one model call.
+    const fast = this.fastPath(text);
+    if (fast && fast.length) {
+      return this.runFastPath(text, fast, correlationId, toolCalls, approvalsRequested, log, onText);
+    }
+
     const specs = this.toolSpecs();
     const messages: LlmMessage[] = [...(await this.recentHistory()), { role: "user", content: text }];
     let finalText = "";
@@ -398,6 +414,37 @@ export abstract class BaseAgent {
     }
 
     return finalText || "Done.";
+  }
+
+  /** Run a deterministic tool plan, then a single streaming model call to phrase. */
+  private async runFastPath(
+    text: string,
+    plan: { name: string; input: Record<string, unknown> }[],
+    correlationId: string,
+    toolCalls: ToolCallRecord[],
+    approvalsRequested: string[],
+    log: (l: string) => void,
+    onText?: (delta: string) => void,
+  ): Promise<string> {
+    const summaries: string[] = [];
+    for (const call of plan) {
+      const { record, result } = await this.executeTool(call.name, call.input, { correlationId, log });
+      toolCalls.push(record);
+      if (record.approvalId) approvalsRequested.push(record.approvalId);
+      summaries.push(result.summary);
+    }
+    const findings = summaries.join(" | ");
+    const messages: LlmMessage[] = [
+      {
+        role: "user",
+        content: `${text}\n\n(The system has already run its safety checks on this message. Findings: ${findings}\n\nReply to me directly now in 2-4 warm, plain-language sentences based on those findings. Do not call any tools.)`,
+      },
+    ];
+    // Single turn, no tools -> no further model round trips.
+    const turn = onText
+      ? await llmTurnStream({ system: this.config.systemPrompt, messages, tools: [], onText })
+      : await llmTurn({ system: this.config.systemPrompt, messages, tools: [] });
+    return turn.text || findings || "Done.";
   }
 
   private async runSandbox(

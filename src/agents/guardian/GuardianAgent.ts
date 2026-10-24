@@ -2,6 +2,8 @@ import { BaseAgent, type AgentConfig, type SandboxPlan } from "../base/BaseAgent
 import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/types";
 import { guardianPrompt } from "./guardianPrompt";
 import { guardianTools } from "./guardianTools";
+import { riskAtLeast } from "./scamPolicy";
+import { classifyRequestedAction, detectSignals } from "./scamSignals";
 
 export class GuardianAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -68,6 +70,19 @@ export class GuardianAgent extends BaseAgent {
       });
     }
     return super.handleEvent(event);
+  }
+
+  /**
+   * Low-latency hot path: if a message looks like a scam or requests an action,
+   * run the full screening in code (one tool), then let the model phrase the
+   * warning in a single streaming turn — no model-driven tool round trips.
+   */
+  protected fastPath(message: string): { name: string; input: Record<string, unknown> }[] | null {
+    const analysis = detectSignals(message);
+    const action = classifyRequestedAction(message);
+    const suspicious = action.type !== "none" || riskAtLeast(analysis.risk, "medium");
+    if (!suspicious) return null;
+    return [{ name: "screenInboundMessage", input: { content: message, channel: "phone" } }];
   }
 
   protected async sandboxPlan(message: string, _ctx: ToolContext): Promise<SandboxPlan> {
