@@ -1,0 +1,77 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { createInMemoryDataLayer } from "@/agents/base/memoryStore";
+import { createAgent } from "@/agents/registry";
+import { InMemorySearchIndex, redactPII, setIncidentIndex } from "@/integrations/search";
+import {
+  MARGARET_SCAM_MESSAGE,
+  MARGARET_USER,
+  indexSeededIncidents,
+  seedMargaretScenario,
+} from "@/agents/guardian/scamScenario";
+
+let index: InMemorySearchIndex;
+
+beforeEach(() => {
+  index = new InMemorySearchIndex();
+  setIncidentIndex(index);
+});
+
+async function seeded() {
+  const data = createInMemoryDataLayer();
+  await seedMargaretScenario(data, MARGARET_USER);
+  await indexSeededIncidents(data, MARGARET_USER, index);
+  const guardian = createAgent("guardian", { data, userId: MARGARET_USER });
+  await guardian.initialize();
+  return { data, guardian };
+}
+
+describe("incident search (Track 4)", () => {
+  it("redacts PII before indexing", () => {
+    const red = redactPII("Call 1-800-555-0199, SSN 123-45-6789, pay $2,000, email me@x.com");
+    expect(red).not.toMatch(/555-0199/);
+    expect(red).not.toMatch(/123-45-6789/);
+    expect(red).not.toMatch(/2,000/);
+    expect(red).not.toMatch(/me@x\.com/);
+  });
+
+  it("ranks the correct past incident first for 3 different queries, citing ids", async () => {
+    await seeded();
+    const cases: { query: string; expect: RegExp }[] = [
+      { query: "fake grandchild asking for bail money", expect: /grandchild|bail/i },
+      { query: "IRS arrest over back taxes", expect: /irs|arrest|taxes/i },
+      { query: "Amazon security gift card", expect: /amazon/i },
+    ];
+    for (const c of cases) {
+      const hits = await index.search({ query: c.query, userId: MARGARET_USER, limit: 5 });
+      expect(hits.length).toBeGreaterThan(0);
+      expect(hits[0].snippet).toMatch(c.expect);
+      expect(hits[0].doc.incidentId).toBeTruthy();
+    }
+  });
+
+  it("the Guardian tool answers with a cited incident id", async () => {
+    const { guardian } = await seeded();
+    const { result } = await guardian.executeTool("searchPastIncidents", {
+      query: "someone impersonating my grandson for gift cards",
+    });
+    const d = result.data as { hits: any[] };
+    expect(d.hits.length).toBeGreaterThan(0);
+    expect(result.summary).toContain(d.hits[0].incidentId);
+  });
+
+  it("search is scoped to the caller's own incidents", async () => {
+    await seeded();
+    const other = await index.search({ query: "gift card", userId: "someone-else", limit: 5 });
+    expect(other).toHaveLength(0);
+  });
+
+  it("a freshly screened incident becomes searchable", async () => {
+    const { guardian } = await seeded();
+    await guardian.executeTool("screenInboundMessage", {
+      content: MARGARET_SCAM_MESSAGE, channel: "phone", claimant: "Jake",
+    });
+    const hits = await index.search({ query: "grandson gift cards trouble", userId: MARGARET_USER, limit: 5 });
+    // The just-screened incident is the fake-grandchild type and should surface.
+    expect(hits.some((h) => h.doc.scamType === "fake_grandchild")).toBe(true);
+  });
+});

@@ -67,6 +67,18 @@ export function auth0Status(): IntegrationStatus {
   };
 }
 
+export function elasticStatus(): IntegrationStatus {
+  const live = has("ELASTIC_URL") && has("ELASTIC_API_KEY");
+  return {
+    key: "elastic",
+    label: "Elasticsearch (incident search)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live — incidents indexed in Elasticsearch for semantic/keyword search."
+      : "Sandbox — a local in-memory index with the same interface powers incident search.",
+  };
+}
+
 export function jiraStatus(): IntegrationStatus {
   const live = has("ATLASSIAN_SITE") && has("ATLASSIAN_EMAIL") && has("ATLASSIAN_API_TOKEN") && has("ATLASSIAN_PROJECT_KEY");
   return {
@@ -110,6 +122,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     cartesiaStatus(),
     auth0Status(),
     jiraStatus(),
+    elasticStatus(),
     armadinStatus(),
     mossStatus(),
   ];

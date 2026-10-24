@@ -11,6 +11,7 @@
  */
 
 import { id, now } from "@/lib/id";
+import { getIncidentIndex, redactPII, scamTypeFromSignals } from "@/integrations/search";
 import type { ToolContext } from "../base/types";
 import {
   canViewIncidents,
@@ -224,6 +225,24 @@ export async function runScamScreening(
     action: "scam.incident",
     correlationId: ctx.correlationId,
     detail: { incidentId: incident.id, outcome, caregiversAlerted: incident.visibility.caregiversAlerted },
+  });
+
+  // Index job: PII-redacted summary goes to the incident search index.
+  await getIncidentIndex().index({
+    incidentId: incident.id,
+    userId: ctx.userId,
+    channel,
+    scamType: scamTypeFromSignals(analysis.signals.map((s) => s.code)),
+    riskLevel: analysis.risk,
+    receivedAt,
+    text: redactPII(input.message),
+    signals: analysis.signals.map((s) => s.code),
+  });
+  await ctx.audit.record({
+    actor: "guardian",
+    action: "incident.indexed",
+    correlationId: ctx.correlationId,
+    detail: { incidentId: incident.id },
   });
 
   for (const alert of caregiverAlerts) {

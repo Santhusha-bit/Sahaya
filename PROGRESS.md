@@ -75,8 +75,22 @@ NOTE: the live Jira path is unverified (no Atlassian credentials supplied); it i
 written against Jira Cloud REST API v3 and guarded so it never affects the local
 gate. Falls back to the fully-tested sandbox store.
 
-## Track 4 — Elastic incident search ⏳ next
-## Track 5 — Fetch.ai agent-to-agent messaging ⏳ todo
+## Track 4 — Elastic incident search ✅ done
+- `src/integrations/search.ts` — `IncidentSearchIndex` interface; `InMemorySearchIndex`
+  (sandbox, keyword overlap + risk boost) and `ElasticSearchIndex` (live, REST) behind
+  it. `redactPII` strips phones/SSNs/amounts/emails before indexing. Search is scoped
+  to the caller's own `userId`. Process singleton with a test injection seam.
+- Index-after-save job wired into `scamWorkflow` (indexes a PII-redacted summary +
+  audits `incident.indexed`). `scamTypeFromSignals` classifies the scam type.
+- Guardian tool `searchPastIncidents` (query + channel/scamType filters) answers
+  "has someone tried this before?", citing incident ids and snippets, without
+  claiming it is the same caller. `indexSeededIncidents` backfills history.
+- `elasticStatus()` on the status page (sandbox without creds).
+- Tests: `tests/incidentSearch.test.ts` (5) — redaction, correct top-1 for 3 queries
+  with cited ids, permission scoping, freshly-screened incident becomes searchable.
+- Demo: `npm run demo:search` (top match for the Margaret message + 2 more queries).
+
+## Track 5 — Fetch.ai agent-to-agent messaging ⏳ next
 
 ## Missing credentials / unfinished
 - No sponsor credentials provided yet (Armadin, Atlassian/Jira, Elastic, Fetch.ai).

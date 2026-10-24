@@ -7,6 +7,7 @@
  */
 
 import { id, now } from "@/lib/id";
+import { getIncidentIndex, redactPII, type IncidentSearchIndex } from "@/integrations/search";
 import { INCIDENTS_VIEW } from "./scamPolicy";
 import type { DataLayer } from "../base/types";
 
@@ -86,4 +87,34 @@ export async function seedMargaretScenario(data: DataLayer, userId: string = MAR
       updatedAt: now(),
     });
   }
+}
+
+/**
+ * Index the seeded past incidents so the search demo/tests have history. The live
+ * flow indexes each incident as it is created; this backfills the pre-seeded ones.
+ */
+export async function indexSeededIncidents(
+  data: DataLayer,
+  userId: string = MARGARET_USER,
+  index: IncidentSearchIndex = getIncidentIndex(),
+): Promise<number> {
+  const rows = await data.memory.list({ namespace: "guardian", userId, collection: "incidents" });
+  let count = 0;
+  for (const r of rows) {
+    const d = r.data;
+    const summary = String(d.summary ?? "");
+    if (!summary) continue;
+    await index.index({
+      incidentId: String(d.id ?? r.id),
+      userId,
+      channel: String(d.channel ?? "other"),
+      scamType: String(d.scamType ?? "unknown"),
+      riskLevel: String(d.riskLevel ?? "medium"),
+      receivedAt: Number(d.receivedAt ?? r.createdAt),
+      text: redactPII(summary),
+      signals: [],
+    });
+    count++;
+  }
+  return count;
 }

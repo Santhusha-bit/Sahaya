@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
+import { getIncidentIndex } from "@/integrations/search";
 import { detectSignals } from "./scamSignals";
 import { runScamScreening } from "./scamWorkflow";
 
@@ -64,6 +65,41 @@ export const guardianTools: AgentTool[] = [
           blockedActions,
           verification: result.incident.verification,
           caregiversAlerted: result.incident.visibility.caregiversAlerted,
+        },
+      };
+    },
+  },
+  {
+    name: "searchPastIncidents",
+    description:
+      "Search the person's own past scam incidents to answer 'has someone tried this before?'. Returns matching incidents with ids, dates, and evidence snippets. Only the person's own incidents are searched. Summarize similarities without claiming it is the same caller.",
+    inputSchema: z.object({
+      query: z.string().min(1).describe("What to look for, e.g. 'gift card grandson' or the suspicious message."),
+      channel: z.enum(["phone", "text", "email", "in_person", "other"]).optional(),
+      scamType: z.string().optional().describe("Filter by scam type, e.g. 'gift_card', 'fake_bank'."),
+      limit: z.number().int().min(1).max(10).optional(),
+    }),
+    async execute(input, ctx) {
+      const hits = await getIncidentIndex().search({
+        query: input.query,
+        userId: ctx.userId,
+        filters: { channel: input.channel, scamType: input.scamType },
+        limit: input.limit ?? 5,
+      });
+      if (!hits.length) {
+        return { ok: true, summary: "I couldn't find a similar past incident in your history.", data: { hits: [] } };
+      }
+      const top = hits[0];
+      const when = new Date(top.doc.receivedAt).toISOString().slice(0, 10);
+      const lines = hits.map((h) => {
+        const d = new Date(h.doc.receivedAt).toISOString().slice(0, 10);
+        return `• ${d} [${h.doc.incidentId}] (${h.doc.scamType}, ${h.doc.riskLevel}): ${h.snippet}`;
+      });
+      return {
+        ok: true,
+        summary: `Yes — the closest match is ${top.doc.scamType} from ${when} (incident ${top.doc.incidentId}). This looks similar in tactic, though it may not be the same caller.\n${lines.join("\n")}`,
+        data: {
+          hits: hits.map((h) => ({ incidentId: h.doc.incidentId, scamType: h.doc.scamType, riskLevel: h.doc.riskLevel, receivedAt: h.doc.receivedAt, score: h.score, snippet: h.snippet })),
         },
       };
     },
