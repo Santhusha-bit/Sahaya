@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ActivityIcon, GridIcon, HomeIcon, UserIcon, UsersIcon } from "./icons";
+import { ActivityIcon, HomeIcon, UserIcon, UsersIcon } from "./icons";
 
 const TABS = [
   { href: "/", label: "Home", Icon: HomeIcon, match: (p: string) => p === "/" },
-  { href: "/agents", label: "Agents", Icon: GridIcon, match: (p: string) => p.startsWith("/agents") },
   { href: "/activity", label: "Activity", Icon: ActivityIcon, match: (p: string) => p.startsWith("/activity") },
   { href: "/family", label: "Family", Icon: UsersIcon, match: (p: string) => p.startsWith("/family") },
   { href: "/profile", label: "Profile", Icon: UserIcon, match: (p: string) => p.startsWith("/profile") },
@@ -22,7 +21,7 @@ export function BottomNav() {
       <nav
         className="rounded-[22px] border border-white/60 bg-white/80 shadow-[0_8px_30px_rgba(20,24,41,0.14)] backdrop-blur-xl"
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-4">
           {TABS.map(({ href, label, Icon, match }) => {
             const active = match(pathname);
             return (

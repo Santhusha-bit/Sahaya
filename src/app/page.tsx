@@ -88,7 +88,7 @@ export default function HomePage() {
               <Link
                 key={id}
                 href={`/agents/${id}`}
-                className={`card card-interactive fade-up stagger-${Math.min(i + 1, 4)} flex flex-col gap-3 p-4`}
+                className={`card card-interactive fade-up stagger-${Math.min(i + 1, 4)} flex flex-col items-center gap-3 p-4 text-center`}
               >
                 <span
                   className="flex h-12 w-12 items-center justify-center rounded-2xl"
@@ -96,11 +96,8 @@ export default function HomePage() {
                 >
                   <Icon width={24} height={24} />
                 </span>
-                <div>
-                  <div className="text-[16px] font-bold tracking-tight" style={{ color: m.theme.accent }}>
-                    {m.displayName}
-                  </div>
-                  <div className="text-[12.5px] leading-snug text-[var(--muted)]">{m.tagline}</div>
+                <div className="text-[16px] font-bold tracking-tight" style={{ color: m.theme.accent }}>
+                  {m.displayName}
                 </div>
               </Link>
             );
