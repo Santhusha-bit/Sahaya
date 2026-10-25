@@ -303,6 +303,18 @@ export function nessieStatus(): IntegrationStatus {
   };
 }
 
+export function crsStatus(): IntegrationStatus {
+  const live = (has("CRS_USERNAME") || has("CRS_USER")) && (has("CRS_PASSWORD") || has("CRS_PASS"));
+  return {
+    key: "crs",
+    label: "CRS Credit API (credit + identity review)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live: Finance sends real requests to the CRS sandbox API (TransUnion credit report, TransUnion identity verification, AtData FraudFinder) for a CRS test identity only. No bank transaction monitoring."
+      : "Sandbox: no CRS credentials, so Finance uses an offline fixture shaped like a recorded CRS sandbox response for test persona P13. No CRS call is made. Set CRS_USERNAME/CRS_PASSWORD for real sandbox requests.",
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -327,6 +339,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     brightDataStatus(),
     x402Status(),
     nessieStatus(),
+    crsStatus(),
   ];
 }
 

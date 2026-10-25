@@ -12,3 +12,4 @@ delete process.env.APIFY_TOKEN;
 process.env.GROCERY_DISCOVERY_MODE = "sandbox";
 delete process.env.BRIGHTDATA_API_TOKEN;
 delete process.env.GEMINI_API_KEY;
+for (const k of ["CRS_USERNAME", "CRS_USER", "CRS_PASSWORD", "CRS_PASS", "CRS_BASE_URL", "CRS_TEST_PERSONAS", "CRS_LINKED_PERSONA"]) delete process.env[k];

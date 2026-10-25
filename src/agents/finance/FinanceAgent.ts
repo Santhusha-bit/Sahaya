@@ -18,6 +18,7 @@ export class FinanceAgent extends BaseAgent {
       "Is my care facility invoice correct?",
       "What was my spending this month?",
       "Connect my bank account",
+      "Is someone applying for credit in my name?",
     ],
     theme: {
       accent: "#5a6acf",
@@ -85,6 +86,15 @@ export class FinanceAgent extends BaseAgent {
     const m = message.toLowerCase();
     if (/disconnect|unlink|revoke/.test(m) && /bank|account|checking/.test(m)) {
       return { reply: "I'll stop reading that account.", toolCalls: [{ name: "disconnectBankAccount", input: {} }] };
+    }
+    if (/past credit reviews|credit review history|previous credit (check|review)s?/.test(m)) {
+      return { reply: "Here are your past credit reviews and their audit trail.", toolCalls: [{ name: "listCreditReviews", input: {} }] };
+    }
+    if (/credit (report|score|check|file|review)|applying for credit|credit in my name|open(ed)? (an )?account in my name|identity (theft|check|review)|using my (identity|name|details)/.test(m)) {
+      return {
+        reply: "I can check your credit file and identity signals with CRS. I'll ask for your approval first.",
+        toolCalls: [{ name: "reviewCreditAndIdentity", input: { purpose: "identity_protection_review" } }],
+      };
     }
     if (/(connect|link|add).*(bank|checking|account|capital one)/.test(m)) {
       return { reply: "To review your spending I need your OK to read your checking account. Please approve it below.", toolCalls: [{ name: "connectSandboxBankAccount", input: {} }] };

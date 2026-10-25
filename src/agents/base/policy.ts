@@ -173,6 +173,9 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   wellnessHouseholdAnalytics: true,
   /** Mirror approved numeric observations (sleep hours, energy rating) to Tiger Data for trends. Off = purge the mirror. */
   wellnessTimeSeriesSync: true,
+  // --- Finance credit review (CRS) ---
+  /** Finance may run CRS credit/identity reviews (each pull still needs approval). */
+  financeCreditReview: true,
   /** Caregivers may view RAW wellness conversations (off by default — aggregates only). */
   caregiverWellnessRaw: false,
   // --- Household analytics export (Snowflake monthly family care summary) ---

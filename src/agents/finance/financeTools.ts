@@ -124,6 +124,9 @@ const bankTools: AgentTool[] = [
     },
   },
 ];
+import { CREDIT_REVIEW_PURPOSES } from "./credit/creditPolicy";
+import { REVIEW_COLLECTION, runCreditReview } from "./credit/creditReview";
+import { linkedPersonaId } from "./credit/testIdentities";
 
 export const financeTools: AgentTool[] = [
   ...bankTools,
@@ -356,6 +359,57 @@ export const financeTools: AgentTool[] = [
           authMode: user.authMode,
           auth0: auth.mode,
           controlledActionReview: jira.mode === "live" ? "jira" : "local",
+        },
+      };
+    },
+  },
+  {
+    name: "reviewCreditAndIdentity",
+    description:
+      "Run a credit and identity review through the CRS Credit API sandbox for the CRS test identity linked to this account: TransUnion credit report (score, accounts, inquiries), TransUnion identity verification, and AtData FraudFinder contact-risk signals. Explains what changed or looks wrong and recommends next steps. Requires the person's approval for each pull. Does NOT cover bank transactions.",
+    inputSchema: z.object({
+      purpose: z.enum(CREDIT_REVIEW_PURPOSES).default("identity_protection_review"),
+      products: z
+        .array(z.enum(["credit_report", "identity_verification", "fraud_finder"]))
+        .min(1)
+        .default(["credit_report", "identity_verification", "fraud_finder"]),
+      personaId: z.string().regex(/^P\d{2}$/).optional().describe("Omit: defaults to the identity linked to this account."),
+    }),
+    requiresApproval: true,
+    approvalSummary: (input) => ({
+      title: "Approve: credit & identity review",
+      description: `Finance wants to request your credit report and identity checks from CRS (soft inquiry, sandbox test identity ${input.personaId ?? linkedPersonaId()}) for: ${String(input.purpose).replace(/_/g, " ")}. Nothing on any account will change.`,
+    }),
+    async execute(input, ctx) {
+      return runCreditReview(ctx, input);
+    },
+  },
+  {
+    name: "listCreditReviews",
+    description: "Show past credit and identity reviews with their CRS request ids, findings, and audit trail.",
+    inputSchema: z.object({ limit: z.number().int().min(1).max(20).default(5) }),
+    async execute(input, ctx) {
+      const reviews = (await ctx.memory.list(REVIEW_COLLECTION, { limit: 200 }))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, input.limit);
+      const auditTrail = (await ctx.audit.list({ limit: 500 })).filter(
+        (e) => e.actor === "finance" && (e.action.startsWith("credit.") || e.action.startsWith("crs.")),
+      );
+      return {
+        ok: true,
+        summary: reviews.length
+          ? `${reviews.length} credit review(s). Latest: ${String(reviews[0].data.overall)} on ${new Date(reviews[0].createdAt).toLocaleDateString()} (${String(reviews[0].data.mode)}).`
+          : "No credit reviews yet.",
+        data: {
+          reviews: reviews.map((r) => ({
+            reviewId: r.id,
+            at: r.createdAt,
+            mode: r.data.mode,
+            overall: r.data.overall,
+            requestIds: (r.data.requests as Array<{ requestId?: string }> | undefined)?.map((q) => q.requestId),
+            findings: (r.data.findings as Array<{ id: string; severity: string }> | undefined)?.map((f) => `${f.severity}:${f.id}`),
+          })),
+          auditTrail,
         },
       };
     },
