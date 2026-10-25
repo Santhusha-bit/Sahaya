@@ -20,6 +20,7 @@ import type { ConsentSettings } from "@/agents/base/policy";
 import {
   getWellnessInferenceProvider,
   SandboxWellnessInferenceAdapter,
+  type InferenceTrace,
   type WellnessInferenceProvider,
 } from "@/integrations/bitdeer";
 import { minimizeForExternal } from "./privacyFilter";
@@ -34,6 +35,8 @@ export interface ExtractionProvenance {
   externalSkipped: boolean;
   redactions: number;
   redactedKinds: string[];
+  /** Provider response id of the inference call (absent if the call failed). */
+  requestId?: string;
 }
 
 export interface ExtractionResult {
@@ -42,6 +45,12 @@ export interface ExtractionResult {
   rejected: CandidateDecision[];
   decisions: CandidateDecision[];
   provenance: ExtractionProvenance;
+  /** The exact (minimized) text sent to the provider. */
+  sentText: string;
+  /** Verifiable record of the inference call; absent if the call failed. */
+  trace?: InferenceTrace;
+  /** Set when the provider call failed; nothing is stored in that case. */
+  inferenceError?: string;
 }
 
 /**
@@ -60,7 +69,10 @@ export function resolveProvider(
   return { provider, externalSkipped: false };
 }
 
-function toCanonical(d: CandidateDecision, prov: { provider: string; model: string; mode: "live" | "sandbox" }): CanonicalObservation {
+function toCanonical(
+  d: CandidateDecision,
+  prov: { provider: string; model: string; mode: "live" | "sandbox"; requestId?: string },
+): CanonicalObservation {
   const c = d.candidate;
   return {
     id: id("obs"),
@@ -71,7 +83,13 @@ function toCanonical(d: CandidateDecision, prov: { provider: string; model: stri
     source: (c.source as ObservationSource) ?? "self_report",
     requiresConfirmation: d.verdict === "needs_confirmation" || !!c.requires_confirmation,
     evidence: d.evidence,
-    provenance: { provider: prov.provider, model: prov.model, mode: prov.mode, extractedAt: now() },
+    provenance: {
+      provider: prov.provider,
+      model: prov.model,
+      mode: prov.mode,
+      extractedAt: now(),
+      ...(prov.requestId ? { requestId: prov.requestId } : {}),
+    },
   };
 }
 
@@ -105,9 +123,11 @@ export async function extractObservations(opts: {
   // Step 3: inference (advisory). A provider failure must not corrupt anything.
   let raw: unknown = { observations: [] };
   let inferenceError: string | undefined;
+  let trace: InferenceTrace | undefined;
   try {
     const result = await provider.infer({ text: minimized.text });
     raw = result.raw;
+    trace = result.trace;
   } catch (err) {
     inferenceError = err instanceof Error ? err.message : String(err);
   }
@@ -115,7 +135,7 @@ export async function extractObservations(opts: {
   // Step 4-8: strict validation + evidence grounding against the ORIGINAL text.
   const policy = validateObservations(raw, text);
 
-  const prov = { provider: provider.name, model: provider.model, mode: provider.mode };
+  const prov = { provider: provider.name, model: provider.model, mode: provider.mode, requestId: trace?.requestId };
   const accepted = policy.accepted.map((d) => toCanonical(d, prov));
   const needsConfirmation = policy.needsConfirmation.map((d) => toCanonical(d, prov));
 
@@ -129,6 +149,9 @@ export async function extractObservations(opts: {
       rejected: policy.rejected.length,
       rejections: policy.rejected.map((r) => ({ type: r.candidate.type, reason: r.reason, layer: r.layer })),
       inferenceError,
+      requestId: trace?.requestId,
+      latencyMs: trace?.latencyMs,
+      usage: trace?.usage,
     },
   });
 
@@ -144,6 +167,10 @@ export async function extractObservations(opts: {
       externalSkipped,
       redactions: minimized.redactions,
       redactedKinds: minimized.redactedKinds,
+      ...(trace ? { requestId: trace.requestId } : {}),
     },
+    sentText: minimized.text,
+    ...(trace ? { trace } : {}),
+    ...(inferenceError ? { inferenceError } : {}),
   };
 }

@@ -27,7 +27,7 @@ export function Navbar() {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-        scrolled ? "glass shadow-[0_4px_20px_rgba(23,43,58,0.06)]" : "bg-transparent"
+        scrolled ? "panel shadow-[0_4px_20px_rgba(23,43,58,0.06)]" : "bg-transparent"
       }`}
     >
       <nav
@@ -73,7 +73,7 @@ export function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="glass border-t border-line lg:hidden">
+        <div className="panel border-t border-line lg:hidden">
           <ul className="container-xl flex flex-col gap-1 py-4">
             {NAV_LINKS.map((link) => (
               <li key={link.href}>

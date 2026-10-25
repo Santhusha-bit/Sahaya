@@ -76,6 +76,8 @@ export interface CanonicalObservation {
     model: string;
     mode: "live" | "sandbox";
     extractedAt: number;
+    /** Provider response id of the inference call that proposed this observation. */
+    requestId?: string;
   };
 }
 

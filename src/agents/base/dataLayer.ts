@@ -8,7 +8,7 @@ import type { DataLayer } from "./types";
  * in-process store shared across requests via a global (so conversation/task
  * state survives between API calls within one dev server process).
  */
-const GLOBAL_KEY = "__Sahaya_data_layer__";
+const GLOBAL_KEY = "__sahaya_data_layer__";
 
 export function getDataLayer(): DataLayer {
   const g = globalThis as Record<string, unknown>;

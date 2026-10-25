@@ -11,6 +11,7 @@
  *   POST /screen  {content, channel?, claimant?}  -> full scam workflow result
  *   POST /message {text}     -> a Guardian conversational turn (LLM or sandbox)
  *   GET  /incidents          -> the Guardian's recorded incidents
+ *   POST /assistance         -> intake for the Guardian uAgent (Fetch.ai bridge)
  */
 
 import { readFileSync } from "node:fs";
@@ -36,6 +37,7 @@ try {
 const { allIntegrationStatuses } = await import("@/lib/env");
 const { createInMemoryDataLayer } = await import("@/agents/base/memoryStore");
 const { createAgent } = await import("@/agents/registry");
+const { acceptAssistanceAtGuardian } = await import("@/integrations/fetchai");
 const { seedMargaretScenario, indexSeededIncidents, MARGARET_USER } = await import(
   "@/agents/guardian/scamScenario"
 );
@@ -91,11 +93,19 @@ const server = createServer(async (req, res) => {
         toolCalls: reply.toolCalls.map((t) => ({ name: t.toolName, status: t.status })),
       });
     }
+    if (req.method === "POST" && url.pathname === "/assistance") {
+      // Intake for the Guardian uAgent (GUARDIAN_AGENT_URL=http://localhost:8030).
+      const token = process.env.SAHAYA_BRIDGE_TOKEN?.trim();
+      if (token && req.headers["x-sahaya-bridge-token"] !== token) {
+        return send(res, 401, { status: "rejected", reason: "bad_bridge_token" });
+      }
+      return send(res, 200, await acceptAssistanceAtGuardian(data, await readBody(req)));
+    }
     if (req.method === "GET" && url.pathname === "/incidents") {
       const incidents = await guardian.memory.list("incidents");
       return send(res, 200, { count: incidents.length, incidents: incidents.map((i) => i.data) });
     }
-    return send(res, 404, { error: "Not found", routes: ["/health", "POST /screen", "POST /message", "/incidents"] });
+    return send(res, 404, { error: "Not found", routes: ["/health", "POST /screen", "POST /message", "/incidents", "POST /assistance"] });
   } catch (err) {
     send(res, 500, { error: err instanceof Error ? err.message : String(err) });
   }
@@ -108,4 +118,5 @@ server.listen(PORT, () => {
   console.log(`  POST /screen   {content, channel?, claimant?}`);
   console.log(`  POST /message  {text}`);
   console.log(`  GET  /incidents`);
+  console.log(`  POST /assistance  (Fetch.ai Guardian uAgent intake)`);
 });

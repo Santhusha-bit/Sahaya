@@ -2,6 +2,7 @@ import { BaseAgent, type AgentConfig, type SandboxPlan } from "../base/BaseAgent
 import type { AgentTool, ToolContext } from "../base/types";
 import { wellnessPrompt } from "./wellnessPrompt";
 import { wellnessTools } from "./wellnessTools";
+import { isRecallQuestion } from "./conversationContext";
 
 export class WellnessAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -16,6 +17,7 @@ export class WellnessAgent extends BaseAgent {
       "I feel a bit lonely today",
       "I had a lovely visit from my neighbor",
       "I'd love to talk to my daughter this week",
+      "Do you remember what I told you about my garden?",
     ],
     theme: {
       accent: "#c98a2e",
@@ -46,7 +48,8 @@ export class WellnessAgent extends BaseAgent {
     }
     if (/no ?one to help|nobody to help|don'?t have anyone|no one can help|help me get groceries|need someone to/.test(m)) {
       return {
-        reply: "You shouldn't have to manage that alone. Let me ask Guardian to arrange someone to help you.",
+        reply:
+          "You shouldn't have to manage that alone. With your permission, I can ask Guardian to arrange someone to help. Tap Approve below and I'll send the request.",
         toolCalls: [{ name: "requestHumanAssistance", input: { need: message.slice(0, 280), urgency: "soon" } }],
       };
     }
@@ -54,6 +57,13 @@ export class WellnessAgent extends BaseAgent {
       return {
         reply: "Thank you for telling me. Let me ask Care to help with meals so you don't have to worry about it.",
         toolCalls: [{ name: "requestCareAssist", input: { kind: "meal", note: message.slice(0, 280) } }],
+      };
+    }
+    if (isRecallQuestion(message)) {
+      // "Do you remember what I told you about my garden?" -> verified Backboard recall.
+      return {
+        reply: "Let me think back to what you've told me.",
+        toolCalls: [{ name: "recallConversationContext", input: { query: message } }],
       };
     }
     const valence = /lonely|sad|can'?t sleep|pain|not eating|alone/.test(m) ? "negative" : /good|happy|lovely|enjoyed|visit/.test(m) ? "positive" : "neutral";

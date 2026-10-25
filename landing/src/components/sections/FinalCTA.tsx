@@ -63,7 +63,7 @@ export function FinalCTA() {
             </a>
             <a
               href="#technology"
-              className="btn border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"
+              className="btn border border-white/40 bg-transparent text-white hover:bg-white hover:text-ink"
             >
               Explore Our Technology
             </a>

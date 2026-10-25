@@ -1,12 +1,142 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
+import type { ToolContext } from "../base/types";
+import { getHouseholdCoordinator } from "@/integrations/jira";
 import { createWorkItemStore } from "@/integrations/jira";
 import { createFinanceAssistanceBridge, requestFinancialAssistance } from "@/integrations/fetchai";
 import { getDataLayer } from "../base/dataLayer";
 import { getCurrentUser } from "@/lib/user";
 import { auth0Status, jiraStatus } from "@/lib/env";
+import { getNessieClient } from "@/integrations/nessie";
+import {
+  BankNotAuthorizedError,
+  connectBank,
+  currentSuggestions,
+  decideSuggestion,
+  fetchAuthorizedTransactions,
+  revokeBank,
+  runSpendingAnalysis,
+} from "./nessie/service";
+
+const notConnected = (err: unknown) =>
+  err instanceof BankNotAuthorizedError
+    ? { ok: false, summary: err.message, error: "bank_not_authorized" }
+    : null;
+
+/** Capital One Nessie: authorized bank data -> spending review. */
+const bankTools: AgentTool[] = [
+  {
+    name: "connectSandboxBankAccount",
+    description:
+      "Ask the person to let Finance read purchases from their Capital One (Nessie sandbox) checking account. Needs their approval. Read-only: Finance can never move money or create purchases.",
+    inputSchema: z.object({}),
+    requiresApproval: true,
+    approvalSummary: () => ({
+      title: "Let Finance read your checking account",
+      description:
+        "Finance will read purchases from your Capital One sandbox checking account to review spending. Read-only: it cannot move money. You can disconnect any time.",
+    }),
+    async execute(_input, ctx) {
+      const { connection, created } = await connectBank({ memory: ctx.memory, nessie: getNessieClient() });
+      return {
+        ok: true,
+        summary: `Connected ${connection.nickname} ending ${connection.last4} (${connection.backend === "live" ? "Capital One Nessie" : "Nessie sandbox emulator"}, read-only).${created ? ` ${connection.purchasesSeeded} test purchases loaded.` : ""}`,
+        data: { last4: connection.last4, backend: connection.backend, created },
+      };
+    },
+  },
+  {
+    name: "fetchBankTransactions",
+    description: "List purchases from the person's connected (authorized) bank account. Only works after they approved access.",
+    inputSchema: z.object({ days: z.number().int().min(1).max(120).default(30) }),
+    async execute(input, ctx) {
+      try {
+        const { connection, transactions } = await fetchAuthorizedTransactions({ memory: ctx.memory, nessie: getNessieClient() }, { days: input.days });
+        const total = transactions.reduce((s, t) => s + (t.status === "cancelled" ? 0 : t.amount), 0);
+        return {
+          ok: true,
+          summary: `${transactions.length} purchase(s) in the last ${input.days} days on ${connection.nickname} ending ${connection.last4}, totaling $${total.toFixed(2)}.`,
+          data: { transactions: transactions.map(({ date, merchant, amount, status }) => ({ date, merchant, amount, status })) },
+        };
+      } catch (err) {
+        const blocked = notConnected(err);
+        if (blocked) return blocked;
+        throw err;
+      }
+    },
+  },
+  {
+    name: "runSpendingAnalysis",
+    description:
+      "Review the connected bank account: categorize every purchase, find possible double charges and subscriptions (including price increases), build this month's spending summary, flag purchases that are new since the last review, and save suggested actions for the person to accept or dismiss.",
+    inputSchema: z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("YYYY-MM; defaults to this month") }),
+    async execute(input, ctx) {
+      try {
+        const { analysis, analysisId } = await runSpendingAnalysis(
+          { memory: ctx.memory, nessie: getNessieClient(), tasks: ctx.tasks },
+          { month: input.month },
+        );
+        const suggestions = await currentSuggestions(ctx.memory);
+        return {
+          ok: true,
+          summary: analysis.spoken,
+          data: {
+            analysisId,
+            month: analysis.month,
+            total: analysis.summary.total,
+            previousTotal: analysis.summary.previousTotal,
+            topCategories: analysis.summary.byCategory.slice(0, 4).map((c) => ({ category: c.label, total: c.total })),
+            subscriptions: analysis.subscriptions.map((s) => ({ merchant: s.merchant, monthly: s.monthlyAmount, priceIncrease: s.priceIncrease })),
+            duplicates: analysis.duplicates.map((d) => ({ merchant: d.merchant, amount: d.amount, dates: d.dates })),
+            newTransactions: analysis.newTransactions,
+            categorizedBy: analysis.reviewer,
+            pendingSuggestions: suggestions.filter((s) => s.status === "suggested").map((s) => ({ actionId: s.id, title: s.title })),
+          },
+        };
+      } catch (err) {
+        const blocked = notConnected(err);
+        if (blocked) return blocked;
+        throw err;
+      }
+    },
+  },
+  {
+    name: "reviewSuggestedAction",
+    description:
+      "Record the person's decision on one suggestion from the spending review. Only call this when the person has clearly said accept or dismiss for that specific suggestion. Accepting a double-charge suggestion only drafts a dispute (sending it needs requestFinancialApproval); accepting a subscription suggestion adds a to-do, Finance never cancels anything itself.",
+    inputSchema: z.object({ actionId: z.string().min(1), decision: z.enum(["accept", "dismiss"]) }),
+    async execute(input, ctx) {
+      const { outcome, disputeId } = await decideSuggestion({ memory: ctx.memory, tasks: ctx.tasks }, input.actionId, input.decision);
+      return { ok: true, summary: outcome, data: { disputeId } };
+    },
+  },
+  {
+    name: "disconnectBankAccount",
+    description: "Revoke Finance's read access to the connected bank account.",
+    inputSchema: z.object({}),
+    async execute(_input, ctx) {
+      const revoked = await revokeBank(ctx.memory);
+      return {
+        ok: true,
+        summary: revoked ? "Disconnected. Finance can no longer read that account." : "No bank account was connected.",
+        data: { revoked },
+      };
+    },
+  },
+];
+import { CREDIT_REVIEW_PURPOSES } from "./credit/creditPolicy";
+import { REVIEW_COLLECTION, runCreditReview } from "./credit/creditReview";
+import { linkedPersonaId } from "./credit/testIdentities";
+import { investigationTools } from "./investigationTools";
+import { startInvestigation } from "./investigation/service";
+import { dispatchInvestigation } from "./investigation/worker";
+import { financeReportTools } from "./paidReports/financeReportTools";
+import { latestReport } from "./paidReports/financeReportWorkflow";
+import { describeInsights, incorporateReport } from "./paidReports/reportInsights";
 
 export const financeTools: AgentTool[] = [
+  ...bankTools,
+  ...investigationTools,
   {
     name: "analyzeMedicalBill",
     description: "Break down a medical bill into line items, compute the total, and flag unusual or duplicate charges.",
@@ -23,15 +153,36 @@ export const financeTools: AgentTool[] = [
         if (li.amount > 1000) flags.push(`High charge: ${li.description} ($${li.amount.toFixed(2)})`);
       }
       for (const [desc, count] of seen) if (count > 1) flags.push(`Possible duplicate: ${desc} x${count}`);
+      // If the person approved buying a billing benchmark earlier, check against it too.
+      const report = await latestReport(ctx.memory, "medical-billing-benchmarks");
+      const benchmark = report ? incorporateReport(report, { lineItems: input.lineItems }) : null;
       const rec = await ctx.memory.save(
         "bills",
-        { provider: input.provider, total, lineItems: input.lineItems, flags, status: "analyzed" },
+        { provider: input.provider, total, lineItems: input.lineItems, flags, benchmark, status: "analyzed" },
         { tags: ["bill"] },
       );
       return {
         ok: true,
-        summary: `Bill from ${input.provider}: $${total.toFixed(2)} across ${input.lineItems.length} item(s). ${flags.length ? `${flags.length} flag(s).` : "Nothing unusual."}`,
-        data: { billId: rec.id, total, flags },
+        summary: `Bill from ${input.provider}: $${total.toFixed(2)} across ${input.lineItems.length} item(s). ${flags.length ? `${flags.length} flag(s).` : "Nothing unusual."}${benchmark ? ` Against the purchased benchmark: ${describeInsights(benchmark)}` : ""}`,
+        data: { billId: rec.id, total, flags, benchmark },
+      };
+    },
+  },
+  {
+    name: "investigateBill",
+    description:
+      "Start a deeper investigation of a medical bill the person has authorized for review (itemized statement + insurance EOB). Runs in the background as a separate Factory Droid agent with read-only calculation tools; Finance verifies its findings. Never submits anything.",
+    inputSchema: z.object({ documentIds: z.array(z.string()).optional().describe("Authorized document ids; omit to use all authorized bill documents.") }),
+    async execute(input, ctx) {
+      const inv = await startInvestigation({ memory: ctx.memory, tasks: ctx.tasks }, { documentIds: input.documentIds, correlationId: ctx.correlationId });
+      await dispatchInvestigation(ctx.userId, inv.id);
+      return {
+        ok: true,
+        summary:
+          inv.engine === "factory-droid"
+            ? `I've started a detailed investigation of this bill with a Factory Droid agent. You can follow its progress on the investigation screen.`
+            : `I've started a detailed investigation of this bill (local engine; Factory Droid isn't configured). You can follow it on the investigation screen.`,
+        data: { investigationId: inv.id, taskId: inv.taskId, engine: inv.engine },
       };
     },
   },
@@ -67,11 +218,14 @@ export const financeTools: AgentTool[] = [
       const variance = Number((input.invoiceTotal - input.agreedMonthly - extrasTotal).toFixed(2));
       const flags: string[] = [];
       if (Math.abs(variance) > 0.01) flags.push(`Unexplained variance of $${variance.toFixed(2)}`);
-      const rec = await ctx.memory.save("facilityAudits", { ...input, extrasTotal, variance, flags }, { tags: ["audit"] });
+      // If the person approved buying a cost benchmark earlier, check against it too.
+      const report = await latestReport(ctx.memory, "care-facility-costs");
+      const benchmark = report ? incorporateReport(report, { monthlyCost: input.agreedMonthly, extras: input.extras }) : null;
+      const rec = await ctx.memory.save("facilityAudits", { ...input, extrasTotal, variance, flags, benchmark }, { tags: ["audit"] });
       return {
         ok: true,
-        summary: `${input.facility}: invoice $${input.invoiceTotal.toFixed(2)} vs agreed $${input.agreedMonthly.toFixed(2)} + $${extrasTotal.toFixed(2)} extras. ${flags.length ? flags.join("; ") : "Matches expectations."}`,
-        data: { auditId: rec.id, variance, flags },
+        summary: `${input.facility}: invoice $${input.invoiceTotal.toFixed(2)} vs agreed $${input.agreedMonthly.toFixed(2)} + $${extrasTotal.toFixed(2)} extras. ${flags.length ? flags.join("; ") : "Matches expectations."}${benchmark ? ` Against the purchased benchmark: ${describeInsights(benchmark)}` : ""}`,
+        data: { auditId: rec.id, variance, flags, benchmark },
       };
     },
   },
@@ -159,7 +313,6 @@ export const financeTools: AgentTool[] = [
           requestingAgent: "finance",
           assignedAgent: "finance",
           permissionScope: "finance:commit-money",
-          requiredRole: "caregiver",
           input,
         });
         workItemId = wi.id;
@@ -242,6 +395,57 @@ export const financeTools: AgentTool[] = [
     },
   },
   {
+    name: "reviewCreditAndIdentity",
+    description:
+      "Run a credit and identity review through the CRS Credit API sandbox for the CRS test identity linked to this account: TransUnion credit report (score, accounts, inquiries), TransUnion identity verification, and AtData FraudFinder contact-risk signals. Explains what changed or looks wrong and recommends next steps. Requires the person's approval for each pull. Does NOT cover bank transactions.",
+    inputSchema: z.object({
+      purpose: z.enum(CREDIT_REVIEW_PURPOSES).default("identity_protection_review"),
+      products: z
+        .array(z.enum(["credit_report", "identity_verification", "fraud_finder"]))
+        .min(1)
+        .default(["credit_report", "identity_verification", "fraud_finder"]),
+      personaId: z.string().regex(/^P\d{2}$/).optional().describe("Omit: defaults to the identity linked to this account."),
+    }),
+    requiresApproval: true,
+    approvalSummary: (input) => ({
+      title: "Approve: credit & identity review",
+      description: `Finance wants to request your credit report and identity checks from CRS (soft inquiry, sandbox test identity ${input.personaId ?? linkedPersonaId()}) for: ${String(input.purpose).replace(/_/g, " ")}. Nothing on any account will change.`,
+    }),
+    async execute(input, ctx) {
+      return runCreditReview(ctx, input);
+    },
+  },
+  {
+    name: "listCreditReviews",
+    description: "Show past credit and identity reviews with their CRS request ids, findings, and audit trail.",
+    inputSchema: z.object({ limit: z.number().int().min(1).max(20).default(5) }),
+    async execute(input, ctx) {
+      const reviews = (await ctx.memory.list(REVIEW_COLLECTION, { limit: 200 }))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, input.limit);
+      const auditTrail = (await ctx.audit.list({ limit: 500 })).filter(
+        (e) => e.actor === "finance" && (e.action.startsWith("credit.") || e.action.startsWith("crs.")),
+      );
+      return {
+        ok: true,
+        summary: reviews.length
+          ? `${reviews.length} credit review(s). Latest: ${String(reviews[0].data.overall)} on ${new Date(reviews[0].createdAt).toLocaleDateString()} (${String(reviews[0].data.mode)}).`
+          : "No credit reviews yet.",
+        data: {
+          reviews: reviews.map((r) => ({
+            reviewId: r.id,
+            at: r.createdAt,
+            mode: r.data.mode,
+            overall: r.data.overall,
+            requestIds: (r.data.requests as Array<{ requestId?: string }> | undefined)?.map((q) => q.requestId),
+            findings: (r.data.findings as Array<{ id: string; severity: string }> | undefined)?.map((f) => `${f.severity}:${f.id}`),
+          })),
+          auditTrail,
+        },
+      };
+    },
+  },
+  {
     name: "searchBenefits",
     description: "Find assistance programs / benefits the person may qualify for.",
     inputSchema: z.object({ topic: z.string().min(1).describe("e.g. 'prescription costs', 'home care', 'utilities'") }),
@@ -276,4 +480,46 @@ export const financeTools: AgentTool[] = [
       };
     },
   },
+  {
+    name: "executeDelegatedWorkItem",
+    description:
+      "Carry out a work item another agent assigned to Finance (e.g. a payment Guardian flagged), but only if the execution gate confirms it was approved by the required family reviewers for exactly these parameters. Refusals are explained, never retried around.",
+    inputSchema: z.object({ workItemId: z.string().min(1) }),
+    async execute(input, ctx) {
+      const { service } = getHouseholdCoordinator(ctx.userId);
+      const item = await service.get(input.workItemId);
+      if (!item || item.userId !== ctx.userId) return { ok: false, summary: "I couldn't find that work item.", error: "not_found" };
+      const run = DELEGATED_EXECUTORS[item.toolName];
+      if (!run) return { ok: false, summary: `I don't know how to run "${item.toolName}".`, error: "no_executor" };
+      // Execute what the item holds; the gate re-hashes it, so a store-level edit
+      // of the parameters after approval is caught as input_tampered.
+      const res = await service.execute(item.id, { agentId: ctx.agentId, toolName: item.toolName, input: item.input }, (wi) => run(wi.input as Record<string, unknown>, ctx));
+      await ctx.audit.record({
+        actor: ctx.agentId,
+        action: res.ok ? "work_item.executed" : "work_item.execution_denied",
+        correlationId: ctx.correlationId,
+        detail: { workItemId: item.id, gate: res.gate.code ?? "ok" },
+      });
+      return res.ok
+        ? { ok: true, summary: res.result ?? "Done.", data: { workItemId: item.id, status: "executed" } }
+        : { ok: false, summary: `Not executed: ${res.gate.reason}`, error: res.gate.code, data: { workItemId: item.id } };
+    },
+  },
+  ...financeReportTools,
 ];
+
+/** Side effects for approved, delegated finance work items (sandbox: recorded in Finance memory). */
+const DELEGATED_EXECUTORS: Record<string, (input: Record<string, unknown>, ctx: ToolContext) => Promise<string>> = {
+  async executePayment(input, ctx) {
+    const rec = await ctx.memory.save("payments", { ...input, status: "sent", mode: "sandbox" }, { tags: ["financial-action"] });
+    return `Paid $${Number(input.amount).toFixed(2)} to ${String(input.payee ?? "payee")} (payment ${rec.id}).`;
+  },
+  async freezeCard(input, ctx) {
+    const rec = await ctx.memory.save("cardActions", { ...input, status: "frozen", mode: "sandbox" }, { tags: ["financial-action"] });
+    return `Card ending ${String(input.last4 ?? "????")} frozen (${rec.id}).`;
+  },
+  async fileBillingDispute(input, ctx) {
+    const rec = await ctx.memory.save("disputes", { ...input, status: "filed", mode: "sandbox" }, { tags: ["financial-action"] });
+    return `Dispute filed with ${String(input.merchant ?? "merchant")} (${rec.id}).`;
+  },
+};

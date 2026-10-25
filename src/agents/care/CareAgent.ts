@@ -3,6 +3,47 @@ import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/type
 import { synthesizeSpeech } from "@/integrations/cartesia";
 import { carePrompt } from "./carePrompt";
 import { careTools } from "./careTools";
+import {
+  backendLabel,
+  parseRequestedItems,
+  prepareCartFromDiscovery,
+  runGroceryDiscovery,
+  usualGroceries,
+} from "./groceryWorkflow";
+
+const USUAL_KEYS = ["milk", "bread", "eggs", "bananas", "oats", "soup", "yogurt", "cookies"];
+
+function itemKeyIn(text: string): string | null {
+  return USUAL_KEYS.find((k) => new RegExp(`\\b${k.replace(/s$/, "")}s?\\b`).test(text)) ?? null;
+}
+
+export type ShoppingIntent =
+  | { kind: "usual"; exclude: string[] }
+  | { kind: "track" }
+  | { kind: "remove"; itemKey: string }
+  | { kind: "approve_by_voice" };
+
+/** Deterministic shopping intent parser used by both the sandbox planner and the live fast path. */
+export function shoppingIntent(message: string): ShoppingIntent | null {
+  const m = message.toLowerCase();
+  if (/\b(where|status|track|tracking)\b.*\b(order|groceries|delivery)\b|\bhas my (order|groceries)\b|\bwhen will (my )?(order|groceries)\b/.test(m)) {
+    return { kind: "track" };
+  }
+  if (/^\s*(yes|yeah|yep|ok(ay)?|sure|approve|go ahead|buy it|place (the|my) order|confirm)\b/.test(m) && !/\busual\b/.test(m)) {
+    return { kind: "approve_by_voice" };
+  }
+  const removeMatch = /\b(remove|take off|take out|drop|delete|don'?t (want|need))\b/.test(m) ? itemKeyIn(m) : null;
+  if (removeMatch && !/\busual\b/.test(m)) return { kind: "remove", itemKey: removeMatch };
+  if (/grocer|order|deliver|usual|shopping/.test(m)) {
+    const exclude: string[] = [];
+    const without = m.match(/\b(?:without|except|but no|no|skip)\b(.*)$/);
+    if (without) for (const k of USUAL_KEYS) if (new RegExp(`\\b${k.replace(/s$/, "")}s?\\b`).test(without[1])) exclude.push(k);
+    return { kind: "usual", exclude };
+  }
+  return null;
+}
+import { DEFAULT_FOOD_PREFERENCES } from "./pantryTools";
+import { DEFAULT_MANDATE, grantMandate } from "./paidServices/paidServiceWorkflow";
 
 export class CareAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -16,7 +57,12 @@ export class CareAgent extends BaseAgent {
       "What medications are due today?",
       "I took my morning blood pressure pill",
       "I need my usual groceries delivered tomorrow",
+      "Where is my grocery order?",
+      "Buy whole milk, coffee and apples",
+      "Is my usual milk a good price right now?",
       "Suggest a few easy dinners",
+      "What can I make for dinner from my pantry?",
+      "Compare oats for the best value",
     ],
     theme: {
       accent: "#4779b8",
@@ -28,6 +74,18 @@ export class CareAgent extends BaseAgent {
   };
 
   readonly tools: AgentTool[] = careTools;
+
+  /**
+   * Live-LLM hot path for shopping: run the deterministic shopping tools first,
+   * then one model call phrases the result. Spoken "yes" and item removal need
+   * the conversation/cart state, so they use the normal tool loop instead.
+   */
+  protected fastPath(message: string): { name: string; input: Record<string, unknown> }[] | null {
+    const intent = shoppingIntent(message);
+    if (intent?.kind === "usual") return [{ name: "buildUsualCart", input: intent.exclude.length ? { exclude: intent.exclude } : {} }];
+    if (intent?.kind === "track") return [{ name: "trackOrder", input: {} }];
+    return null;
+  }
 
   /**
    * Cartesia voice (landing-page service map: Cartesia for voice). Synthesize a
@@ -48,6 +106,11 @@ export class CareAgent extends BaseAgent {
     await this.memory.save("pantry", { item: "bananas" }, { tags: ["pantry"] });
     // A couple of usual-order items live in shared household prefs (Care may write shared).
     await this.memory.writeShared("groceryPreferences", { usual: ["milk", "bread", "eggs", "bananas", "oats"] });
+    // Food preferences the meal planner enforces (allergies are hard filters in code).
+    await this.memory.writeShared("dietPreferences", { ...DEFAULT_FOOD_PREFERENCES });
+    // Previously authorized limit for paid product-data lookups over x402 (test
+    // USDC). Anything above it asks first; changing it requires approval.
+    await grantMandate(this.memory, DEFAULT_MANDATE, "user (onboarding)");
   }
 
   async handleEvent(event: AgentEvent): Promise<AgentTask | null> {
@@ -74,6 +137,17 @@ export class CareAgent extends BaseAgent {
 
   protected async sandboxPlan(message: string, ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
+    if (/paid (data|service|lookup)|spending limit|x402/.test(m)) {
+      return { reply: "Here's your paid-service limit and spending.", toolCalls: [{ name: "getPaidServiceSpending", input: {} }] };
+    }
+    if (/\bcompare\b|best value|cheapest|healthiest|lowest.sodium/.test(m)) {
+      const query = m.match(/\b(oats?|oatmeal|soups?|yogh?urt|milk|bread)\b/)?.[1] ?? m.replace(/.*compare\s+/, "").split(/\s+for\b|[?.!]/)[0].trim();
+      const tier = /detail|nutrition|healthiest|sodium|sugar|protein/.test(m) ? "detailed" : "basic";
+      return {
+        reply: "I'll get a product comparison from the paid product-data service.",
+        toolCalls: [{ name: "compareProducts", input: { query: query || "oats", tier } }],
+      };
+    }
     if (/medication|medicine|pill|dose|due/.test(m) && !/took|taken|skipped/.test(m)) {
       return { reply: "Here's your medication schedule.", toolCalls: [{ name: "getMedicationSchedule", input: { when: "today" } }] };
     }
@@ -84,32 +158,74 @@ export class CareAgent extends BaseAgent {
         toolCalls: [{ name: "recordMedicationConfirmation", input: { medicationName: name, taken: true } }],
       };
     }
-    if (/grocer|order|deliver|usual/.test(m)) {
-      // Full §7 workflow: retrieve prefs -> list -> cart -> REQUEST APPROVAL.
-      // Done imperatively here so a real pending approval appears for the user;
-      // approving it runs requestOrderApproval, which places the order and asks
-      // Finance to review the payment.
-      const prefs = await ctx.memory.readShared("groceryPreferences").catch(() => []);
-      const usual = (prefs[0]?.data.usual as string[]) ?? ["milk", "bread", "eggs", "bananas", "oats"];
-      await ctx.memory.save("groceryLists", { items: usual, status: "draft" }, { tags: ["grocery"] });
-      const lines = [
-        { productId: "p_milk", name: "2% Milk, 1 gal", quantity: 1, price: 3.79 },
-        { productId: "p_bread", name: "Whole Wheat Bread", quantity: 1, price: 2.99 },
-        { productId: "p_eggs", name: "Large Eggs, dozen", quantity: 1, price: 4.29 },
-        { productId: "p_bananas", name: "Bananas, bunch", quantity: 1, price: 1.89 },
-        { productId: "p_oats", name: "Rolled Oats, 18oz", quantity: 1, price: 3.49 },
-      ].map((l) => ({ ...l, lineTotal: Number((l.price * l.quantity).toFixed(2)) }));
-      const total = Number(lines.reduce((s, l) => s + l.lineTotal, 0).toFixed(2));
-      const cart = await ctx.memory.save("carts", { lines, total, status: "ready" }, { tags: ["cart"] });
-      await ctx.approvals.request({
-        toolName: "requestOrderApproval",
-        toolInput: { cartId: cart.id },
-        title: "Place grocery order",
-        description: `Care wants to place your usual order: ${lines.length} items, $${total.toFixed(2)}.`,
-        correlationId: ctx.correlationId,
-      });
+    if (/price|compare|cheap|good deal|how much|cost/.test(m)) {
+      const item = ["milk", "eggs", "oats", "bread", "bananas", "chicken", "rice", "soup", "yogurt", "apples"].find((k) => m.includes(k.replace(/s$/, ""))) ?? "milk";
+      return { reply: `Let me check current prices for ${item}.`, toolCalls: [{ name: "comparePrices", input: { query: item } }] };
+    }
+    if (/add (it|that|this|the (recommended|cheaper|best)( one)?)|draft cart|put (it|that) in/.test(m)) {
+      return { reply: "Adding that to your draft cart.", toolCalls: [{ name: "addToDraftCart", input: { choice: "recommended" } }] };
+    }
+    if (/pantry|fridge|refrigerator|photo|what (?:can|should) i (?:make|cook)/.test(m)) {
+      // Pantry-photo flow (checked before shopping so "yes, I have those" is a
+      // pantry confirmation, never mistaken for a spoken purchase approval): confirm the uncertain items first, then plan from what is confirmed.
+      if (/\b(yes|yep|confirm|have (?:them|those|all|it))\b/.test(m) && !/\b(no|not|don'?t)\b/.test(m)) {
+        return {
+          reply: "Thanks for checking.",
+          toolCalls: [
+            { name: "confirmPantryItems", input: { confirmAllUncertain: true } },
+            { name: "planDinnerFromPantry", input: {} },
+          ],
+        };
+      }
+      return { reply: "Let me look at what you have.", toolCalls: [{ name: "planDinnerFromPantry", input: {} }] };
+    }
+    // An explicit list ("buy milk and eggs") gets live Apify discovery; "my usual
+    // groceries" uses the history-based cart below.
+    const explicitList = parseRequestedItems(message);
+    if (explicitList) {
+      // Full workflow: preferred items -> Apify product discovery -> compare ->
+      // cart -> REQUEST APPROVAL. Done imperatively so a real pending approval
+      // appears for the user; approving it runs requestOrderApproval, which
+      // places the order and asks Finance to review the payment.
+      const items = explicitList;
+      await ctx.memory.save("groceryLists", { items, status: "draft" }, { tags: ["grocery"] });
+      const { discoveryId, discovery } = await runGroceryDiscovery(ctx, items);
+      const cart = await prepareCartFromDiscovery(ctx, discoveryId, { requestApproval: true });
+      const source = backendLabel(discovery);
+      if (!cart.ok) {
+        return { reply: `I searched ${items.length} item(s) using ${source}, but couldn't find current prices to build a cart. Want to try different items?` };
+      }
+      const { plan } = cart;
+      const stores = plan.retailers.length ? ` from ${plan.retailers.slice(0, 3).join(", ")}${plan.retailers.length > 3 ? " and others" : ""}` : "";
+      const missing = plan.missing.length ? ` I couldn't find a price for ${plan.missing.map((x) => x.query).join(", ")}.` : "";
       return {
-        reply: `I've put together your usual groceries — ${lines.length} items for $${total.toFixed(2)}. I just need your approval to place the order (see the card above).`,
+        reply: `I checked fresh prices for your list using ${source}. Your cart is ${plan.lines.length} item(s) for $${plan.total.toFixed(2)}${stores}.${missing} Please review it and approve when you're ready (see the card above).`,
+      };
+    }
+    const shopping = shoppingIntent(message);
+    if (shopping?.kind === "approve_by_voice") {
+      // Spoken "yes" never spends money: approval is only an explicit tap on the
+      // approval card, enforced by the approval gate (no tool can approve).
+      return { reply: "To keep your money safe, please tap the big green Approve button on your cart to confirm the purchase." };
+    }
+    if (shopping?.kind === "track") {
+      return { reply: "Let me check on your order.", toolCalls: [{ name: "trackOrder", input: {} }] };
+    }
+    if (shopping?.kind === "remove") {
+      const [cart] = (await ctx.memory.list("carts", { tag: "shopping" })).filter((c) => c.data.status === "ready");
+      if (!cart) return { reply: "There isn't an open cart to change right now. Say 'order my usual groceries' to start one." };
+      return {
+        reply: `Okay, I'll take the ${shopping.itemKey} off.`,
+        toolCalls: [{ name: "removeCartItem", input: { cartId: cart.id, itemKey: shopping.itemKey } }],
+      };
+    }
+    if (shopping?.kind === "usual") {
+      // Full shopping workflow: history/preferences -> product search (Apify when
+      // live) -> substitution policy -> accessible cart -> approval for that exact
+      // cart. Approving it checks out (sandbox) and asks Finance to review payment.
+      return {
+        reply: "Here's your usual grocery order. Please look over the cart and tap Approve when you're happy with it.",
+        toolCalls: [{ name: "buildUsualCart", input: shopping.exclude.length ? { exclude: shopping.exclude } : {} }],
       };
     }
     if (/pick ?up|collect|can'?t get to|bring me|drop off|deliver.*medicine|someone to get/.test(m) && /medic|pill|prescription|refill|pharmac/.test(m)) {

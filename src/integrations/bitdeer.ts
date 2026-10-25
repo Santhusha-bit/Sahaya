@@ -25,12 +25,31 @@ export interface WellnessInferenceRequest {
   text: string;
 }
 
+/**
+ * Verifiable record of ONE inference call. For live calls, `requestId` is the id
+ * Bitdeer returned in its response body, so a stored observation can be traced
+ * back to the exact model request that proposed it.
+ */
+export interface InferenceTrace {
+  requestId: string;
+  endpoint: string;
+  latencyMs: number;
+  finishReason?: string;
+  usage?: { promptTokens?: number; completionTokens?: number; reasoningTokens?: number };
+  /** Characters actually sent to the provider (after privacy minimization). */
+  sentChars: number;
+  /** The model's raw text output (truncated), exactly as received. */
+  rawContent: string;
+}
+
 export interface WellnessInferenceResult {
   /** Raw, UNTRUSTED candidate observations as returned by the provider. */
   raw: unknown;
   provider: string;
   model: string;
   mode: "live" | "sandbox";
+  /** Set by both real adapters; optional so lightweight test stubs can omit it. */
+  trace?: InferenceTrace;
 }
 
 /** The provider contract both the real and sandbox adapters implement. */
@@ -43,6 +62,8 @@ export interface WellnessInferenceProvider {
 
 export const BITDEER_BASE_URL = process.env.BITDEER_BASE_URL?.trim() || "https://api-inference.bitdeer.ai/v1";
 export const BITDEER_MODEL = process.env.BITDEER_MODEL?.trim() || "deepseek-ai/DeepSeek-V4-Flash";
+/** Set BITDEER_THINKING=on to stop sending the thinking-off template kwarg. */
+const DISABLE_THINKING = process.env.BITDEER_THINKING?.trim().toLowerCase() !== "on";
 
 const EXTRACTION_SYSTEM = `You extract structured wellness observations from a short message by an older adult.
 Return ONLY JSON: {"observations":[...]}. Each observation has:
@@ -68,7 +89,9 @@ export class BitdeerInferenceAdapter implements WellnessInferenceProvider {
   }
 
   async infer(req: WellnessInferenceRequest): Promise<WellnessInferenceResult> {
-    const res = await fetch(`${this.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const endpoint = `${this.baseUrl.replace(/\/$/, "")}/chat/completions`;
+    const started = Date.now();
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -81,8 +104,12 @@ export class BitdeerInferenceAdapter implements WellnessInferenceProvider {
           { role: "user", content: req.text },
         ],
         temperature: 0,
-        max_tokens: 500,
+        max_tokens: 1200,
         response_format: { type: "json_object" },
+        // Reasoning models in the catalog (e.g. DeepSeek-V4) otherwise spend the
+        // token budget on hidden reasoning and can return empty content. This is a
+        // single well-defined extraction task, so thinking is switched off.
+        ...(DISABLE_THINKING ? { chat_template_kwargs: { thinking: false } } : {}),
       }),
     });
 
@@ -92,9 +119,39 @@ export class BitdeerInferenceAdapter implements WellnessInferenceProvider {
     }
 
     const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
+      id?: string;
+      choices?: { finish_reason?: string; message?: { content?: string | null } }[];
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        completion_tokens_details?: { reasoning_tokens?: number };
+      };
     };
-    const content = data.choices?.[0]?.message?.content ?? "";
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content ?? "";
+    const trace: InferenceTrace = {
+      requestId: data.id ?? "unknown",
+      endpoint,
+      latencyMs: Date.now() - started,
+      finishReason: choice?.finish_reason,
+      usage: {
+        promptTokens: data.usage?.prompt_tokens,
+        completionTokens: data.usage?.completion_tokens,
+        reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens,
+      },
+      sentChars: req.text.length,
+      rawContent: content.slice(0, 2000),
+    };
+
+    // A truncated or empty answer is a provider failure, not "no observations".
+    // Surface it so callers report it honestly instead of silently storing nothing.
+    if (choice?.finish_reason === "length") {
+      throw new Error(`Bitdeer output truncated (finish_reason=length, request ${trace.requestId}).`);
+    }
+    if (!content.trim()) {
+      throw new Error(`Bitdeer returned empty content (request ${trace.requestId}).`);
+    }
+
     let raw: unknown;
     try {
       raw = JSON.parse(content);
@@ -102,7 +159,7 @@ export class BitdeerInferenceAdapter implements WellnessInferenceProvider {
       // Malformed JSON is passed through as-is; the policy engine rejects it safely.
       raw = { observations: [], _parseError: true, _content: content.slice(0, 300) };
     }
-    return { raw, provider: this.name, model: this.model, mode: "live" };
+    return { raw, provider: this.name, model: this.model, mode: "live", trace };
   }
 }
 
@@ -158,12 +215,26 @@ export class SandboxWellnessInferenceAdapter implements WellnessInferenceProvide
       }
     }
 
-    return { raw: { observations }, provider: this.name, model: this.model, mode: "sandbox" };
+    const raw = { observations };
+    return {
+      raw,
+      provider: this.name,
+      model: this.model,
+      mode: "sandbox",
+      trace: {
+        requestId: `sandbox-${Date.now().toString(36)}`,
+        endpoint: "local://deterministic-rule-extractor",
+        latencyMs: 0,
+        finishReason: "stop",
+        sentChars: text.length,
+        rawContent: JSON.stringify(raw),
+      },
+    };
   }
 }
 
 /** Process-wide provider (swappable in tests/demos, like the incident index). */
-const GLOBAL_KEY = "__Sahaya_wellness_inference__";
+const GLOBAL_KEY = "__sahaya_wellness_inference__";
 
 export function getWellnessInferenceProvider(): WellnessInferenceProvider {
   const g = globalThis as Record<string, unknown>;

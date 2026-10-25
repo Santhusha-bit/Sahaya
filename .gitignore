@@ -34,6 +34,7 @@ redteam-wellness-report.md
 __pycache__/
 *.pyc
 services/uagents/.venv/
+services/uagents/logs/
 
 # logs
 npm-debug.log*
@@ -45,3 +46,7 @@ yarn-error.log*
 !.vscode/extensions.json
 .idea/
 .vercel
+
+# markdown docs (kept local, not published)
+*.md
+!/README.md

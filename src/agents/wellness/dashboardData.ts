@@ -12,10 +12,23 @@ import { createAgent } from "@/agents/registry";
 import { getConsent } from "@/agents/consent";
 import { AuditLog } from "@/agents/base/audit";
 import { wellnessIntegrationStatuses, cartesiaStatus, auth0Status, type IntegrationStatus } from "@/lib/env";
-import { getPersonalMemoryProvider, type ContinuityItem } from "@/integrations/moss";
+import { getPersonalMemoryProvider } from "@/integrations/moss";
+import { listContinuity } from "./continuityMemory";
+
+export interface ContinuityItem {
+  id: string;
+  kind: string;
+  text: string;
+  createdAt: number;
+  sync: string;
+  reason?: string;
+}
 import { getVoiceProvider } from "@/integrations/cartesia";
-import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
+import { computeTrend, emptyTrend, getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
+import { getLongitudinalTrend, type LongitudinalTrend } from "./longitudinalTrends";
+import { syncWellnessTimeSeries } from "./timeSeriesSync";
 import { activeObservations, type StoredObservation } from "./wellnessStore";
+import { listRememberedContext } from "./conversationContext";
 import {
   DEMO_HOUSEHOLD,
   buildMonthlyReport,
@@ -27,8 +40,12 @@ import type { HouseholdAggregate } from "@/integrations/snowflake";
 export interface WellnessDashboard {
   observations: StoredObservation[];
   continuity: ContinuityItem[];
+  /** Conversational context (Convex canonical; Backboard sync state per item). */
+  conversationContext: { recordId: string; category: string; topic: string; fact: string; sourceAt: number; correctedAt?: number; syncState: string }[];
   sleepTrend: Trend;
   energyTrend: Trend;
+  sleepHistory: LongitudinalTrend;
+  energyHistory: LongitudinalTrend;
   report: { period: string; headline: string; lines: string[] };
   analytics: HouseholdAggregate[];
   consent: Record<string, boolean>;
@@ -44,27 +61,47 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
   const consent = await getConsent(data, userId);
   const observations = (await activeObservations(wellness.memory)).slice().reverse();
 
-  // Personal memory (Moss) — tolerate provider failure.
+  // Continuity memory: the Convex ledger (what Wellness remembers, and whether
+  // each cue was synced to Moss or kept Convex-only). Tolerate failure.
   const moss = getPersonalMemoryProvider();
   let continuity: ContinuityItem[] = [];
   try {
-    continuity = consent.wellnessMemory ? await moss.list(userId, { limit: 20 }) : [];
+    continuity = consent.wellnessMemory
+      ? (await listContinuity(wellness.memory)).slice(0, 20).map((r) => ({
+          id: r.recordId,
+          kind: r.topic,
+          text: r.text,
+          createdAt: r.lastDiscussedAt,
+          sync: r.sync,
+          reason: r.reason,
+        }))
+      : [];
   } catch {
     continuity = [];
   }
 
-  // Trends (Tiger Data).
+  // Conversational context is read from Convex (the source of truth), so the
+  // person always reviews the canonical text, not Backboard's copy.
+  const conversationContext = (await listRememberedContext(wellness.memory)).map((r) => ({
+    recordId: r.recordId, category: r.category, topic: r.topic, fact: r.fact, sourceAt: r.sourceAt, correctedAt: r.correctedAt, syncState: r.syncState,
+  }));
+
+  // Trends (Tiger Data). Run the sync job first so the mirror matches the
+  // canonical record, then read weekly comparisons with evidence + uncertainty.
   const ts = getTimeSeriesProvider();
-  let sleepTrend: Trend = { metric: "sleep", count: 0, average: null, latest: null, direction: "insufficient_data", points: [] };
-  let energyTrend: Trend = { metric: "energy", count: 0, average: null, latest: null, direction: "insufficient_data", points: [] };
+  let sleepTrend: Trend = emptyTrend("sleep");
+  let energyTrend: Trend = emptyTrend("energy");
+  await syncWellnessTimeSeries({ memory: wellness.memory, userId, consent });
   try {
-    [sleepTrend, energyTrend] = await Promise.all([
-      ts.trend({ userId, metric: "sleep" }),
-      ts.trend({ userId, metric: "energy" }),
-    ]);
+    const points = await ts.points({ userId });
+    sleepTrend = computeTrend(points, "sleep");
+    energyTrend = computeTrend(points, "energy");
   } catch {
     /* keep defaults */
   }
+  const [sleepHistory, energyHistory] = await Promise.all(
+    (["sleep", "energy"] as const).map((metric) => getLongitudinalTrend({ memory: wellness.memory, userId, metric, consent })),
+  );
 
   // Household analytics + monthly report (the elder views their own household).
   const householdId = householdForUser(userId);
@@ -91,8 +128,11 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
   return {
     observations,
     continuity,
+    conversationContext,
     sleepTrend,
     energyTrend,
+    sleepHistory,
+    energyHistory,
     report,
     analytics: analyticsRes.aggregates,
     consent,

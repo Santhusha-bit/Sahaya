@@ -1,0 +1,48 @@
+{
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "Product offers",
+      "transformation": {
+        "fields": [
+          "imageUrl",
+          "query",
+          "rank",
+          "productName",
+          "brand",
+          "size",
+          "price",
+          "currency",
+          "pricePer",
+          "availability",
+          "retailer",
+          "storeLocation",
+          "priceObservedAt",
+          "matchScore",
+          "sourceUrl"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "imageUrl": { "label": "Image", "format": "image" },
+          "query": { "label": "List item", "format": "text" },
+          "rank": { "label": "Rank", "format": "number" },
+          "productName": { "label": "Product", "format": "text" },
+          "brand": { "label": "Brand", "format": "text" },
+          "size": { "label": "Size", "format": "text" },
+          "price": { "label": "Price", "format": "number" },
+          "currency": { "label": "Currency", "format": "text" },
+          "pricePer": { "label": "Per", "format": "text" },
+          "availability": { "label": "Availability", "format": "text" },
+          "retailer": { "label": "Retailer", "format": "text" },
+          "storeLocation": { "label": "Store", "format": "text" },
+          "priceObservedAt": { "label": "Price seen", "format": "date" },
+          "matchScore": { "label": "Match", "format": "number" },
+          "sourceUrl": { "label": "Source", "format": "link" }
+        }
+      }
+    }
+  }
+}
