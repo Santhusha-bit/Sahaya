@@ -128,7 +128,8 @@ export function atomicToUsd(atomic: bigint | string): number {
 }
 
 export function formatUsd(usd: number): string {
-  return usd < 1 ? `$${usd.toFixed(usd < 0.1 ? 3 : 2).replace(/0$/, "")}` : `$${usd.toFixed(2)}`;
+  // Cents for normal prices; a third decimal only for sub-cent amounts.
+  return `$${usd.toFixed(usd > 0 && usd < 0.01 ? 3 : 2)}`;
 }
 
 export function encodeHeader(value: unknown): string {
