@@ -69,9 +69,12 @@ async function main() {
   const before = (await activeObservations(wellness.memory)).length;
   const brokenTs: TimeSeriesProvider = {
     backend: "tigerdata",
-    async append() { throw new Error("Tiger Data unreachable"); },
-    async range() { throw new Error("Tiger Data unreachable"); },
-    async trend() { throw new Error("Tiger Data unreachable"); },
+    async status() { return { backend: "tigerdata" as const, mode: "unavailable" as const, detail: "Tiger Data unreachable" }; },
+    async upsert() { throw new Error("Tiger Data unreachable"); },
+    async remove() { throw new Error("Tiger Data unreachable"); },
+    async purgeUser() { throw new Error("Tiger Data unreachable"); },
+    async points() { throw new Error("Tiger Data unreachable"); },
+    async aggregate() { throw new Error("Tiger Data unreachable"); },
   };
   setTimeSeriesProvider(brokenTs);
   const degraded = await runWellnessTurn({ text: "I barely slept, maybe three hours.", memory: wellness.memory, userId: "margaret", consent: DEFAULT_CONSENT, audit: wellness.audit });

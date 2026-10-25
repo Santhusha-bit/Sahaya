@@ -3,6 +3,8 @@ import { getConsent, setConsent } from "@/agents/consent";
 import { getDataLayer } from "@/agents/base/dataLayer";
 import { CROSS_AGENT_RULES } from "@/agents/base/policy";
 import { getCurrentUser } from "@/lib/user";
+import { TIMESERIES_CONSENT_KEY } from "@/agents/wellness/timeSeriesSync";
+import { getTimeSeriesProvider } from "@/integrations/tigerdata";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,5 +24,10 @@ export async function POST(req: Request) {
   }
   const user = getCurrentUser();
   const consent = await setConsent(getDataLayer(), user.id, body);
+  // Revoking trend tracking purges the Tiger Data mirror immediately (Convex,
+  // the canonical record, is untouched).
+  if (body[TIMESERIES_CONSENT_KEY] === false) {
+    await getTimeSeriesProvider().purgeUser(user.id).catch(() => 0);
+  }
   return NextResponse.json({ consent });
 }

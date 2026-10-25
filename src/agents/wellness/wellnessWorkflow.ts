@@ -8,9 +8,11 @@
  *   4. Convex (scoped memory) stores the canonical observation.
  *   5. Moss saves permitted continuity context.
  *   6. Backboard stores + retrieves relevant historical context.
- *   7. Tiger Data updates the sleep/energy time series (fed ONLY from canonical
- *      active observations, so deletes and dedup propagate).
- *   8. The historical trend is retrieved.
+ *   7. The sync job mirrors approved numeric observations into Tiger Data,
+ *      reconciling against canonical active records so corrections, deletes
+ *      and dedup propagate (timeSeriesSync.ts).
+ *   8. The weekly trend is read back and compared with the person's history
+ *      (longitudinalTrends.ts).
  *   9. A contextual, NON-DIAGNOSTIC follow-up is composed.
  *
  * Every external step is wrapped so a failure is reported honestly as a failed
@@ -23,8 +25,10 @@ import type { ConsentSettings } from "@/agents/base/policy";
 import type { ScopedMemory } from "@/agents/base/types";
 import { getHistoricalContextProvider, type HistoryHit } from "@/integrations/backboard";
 import { getPersonalMemoryProvider } from "@/integrations/moss";
-import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
+import { computeTrend, emptyTrend, getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
 import { extractObservations, type ExtractionResult } from "./extractObservations";
+import { getLongitudinalTrend, type LongitudinalTrend } from "./longitudinalTrends";
+import { syncWellnessTimeSeries, type SyncRun } from "./timeSeriesSync";
 import { activeObservations, saveObservation, type StoredObservation } from "./wellnessStore";
 
 export interface SyncStatus {
@@ -42,22 +46,24 @@ export interface WellnessTurnResult {
   historical: HistoryHit[];
   sleepTrend: Trend;
   energyTrend: Trend;
+  /** This week's sleep compared with the person's own history (null if unavailable). */
+  sleepHistory: LongitudinalTrend | null;
+  timeSeriesSync: SyncRun | null;
   followUp: string;
   syncs: SyncStatus[];
 }
 
-function energyScore(o: StoredObservation): number | null {
-  if (o.type !== "energy") return null;
-  const d = (o.description ?? "").toLowerCase();
-  if (/energetic|full of energy|lots of energy/.test(d)) return 4;
-  if (/tired|exhausted|worn out|no energy|low energy|fatigued|drained/.test(d)) return 1;
-  return null;
-}
-
 /** Non-diagnostic, warm follow-up grounded in the trend + whether we've heard this before. */
-function composeFollowUp(sleepTrend: Trend, historical: HistoryHit[], accepted: StoredObservation[]): string {
+function composeFollowUp(sleepTrend: Trend, sleepHistory: LongitudinalTrend | null, historical: HistoryHit[], accepted: StoredObservation[]): string {
   const mentionedSleep = accepted.some((o) => o.type === "sleep_duration" || o.type === "sleep_quality");
   const heardBefore = historical.length > 0;
+  const usual = sleepHistory?.baseline.average;
+  if (mentionedSleep && sleepHistory?.comparison.direction === "lower" && usual != null) {
+    return `Thank you for telling me. That's been a bit less sleep than your usual of around ${usual} hours over the past few weeks. How have the nights been feeling for you?`;
+  }
+  if (mentionedSleep && sleepHistory?.comparison.direction === "higher" && usual != null) {
+    return `It sounds like you've been sleeping a little more than your usual of around ${usual} hours lately. How are you feeling during the day?`;
+  }
   if (mentionedSleep && sleepTrend.direction === "declining") {
     return heardBefore
       ? "I've noticed sleep has come up a few times lately, and it sounds like it's been harder recently. I'm really glad you're telling me. What do you think has been keeping you up?"
@@ -134,32 +140,35 @@ export async function runWellnessTurn(opts: {
     }
   }
 
-  // Step 7: Tiger Data — sync ONLY canonical active observations (idempotent).
+  // Step 7: sync job mirrors approved numeric observations into Tiger Data.
   const active = await activeObservations(memory);
-  let sleepTrend: Trend = { metric: "sleep", count: 0, average: null, latest: null, direction: "insufficient_data", points: [] };
-  let energyTrend: Trend = { metric: "energy", count: 0, average: null, latest: null, direction: "insufficient_data", points: [] };
-  try {
-    const ts = getTimeSeriesProvider();
-    let appended = 0;
-    for (const o of active) {
-      if (o.type === "sleep_duration" && o.value !== undefined) {
-        if (await ts.append({ observationId: o.id, userId, metric: "sleep", value: o.value, unit: o.unit ?? "hours", at: o.createdAt })) appended++;
-      }
-      const es = energyScore(o);
-      if (es !== null) {
-        if (await ts.append({ observationId: o.id, userId, metric: "energy", value: es, unit: "score", at: o.createdAt })) appended++;
-      }
+  const ts = getTimeSeriesProvider();
+  const mode = ts.backend === "tigerdata" ? "live" : "sandbox";
+  let sleepTrend = emptyTrend("sleep");
+  let energyTrend = emptyTrend("energy");
+  let sleepHistory: LongitudinalTrend | null = null;
+  const timeSeriesSync = await syncWellnessTimeSeries({ memory, userId, consent, provider: ts, audit: opts.audit, correlationId: opts.correlationId });
+  if (!timeSeriesSync.ok) {
+    syncs.push({ integration: "tigerdata", mode, ok: false, detail: `Tiger Data sync failed: ${timeSeriesSync.error}` });
+  } else if (timeSeriesSync.status === "purged_no_consent") {
+    syncs.push({ integration: "tigerdata", mode, ok: true, detail: `Time-series sync is off by consent; ${timeSeriesSync.removed} mirrored point(s) purged.` });
+  } else {
+    // Step 8: read the series back and compare this week with the person's history.
+    try {
+      const points = await ts.points({ userId });
+      sleepTrend = computeTrend(points, "sleep");
+      energyTrend = computeTrend(points, "energy");
+      sleepHistory = await getLongitudinalTrend({ memory, userId, metric: "sleep", provider: ts });
+      const s = timeSeriesSync;
+      const vsUsual = sleepHistory.comparison.direction === "insufficient" ? "has no baseline yet" : `is ${sleepHistory.comparison.direction} vs usual`;
+      syncs.push({ integration: "tigerdata", mode, ok: true, detail: `${s.inserted} new, ${s.updated} updated, ${s.removed} removed; sleep this week ${vsUsual}.` });
+    } catch (err) {
+      syncs.push({ integration: "tigerdata", mode, ok: false, detail: `Tiger Data read failed: ${err instanceof Error ? err.message : String(err)}` });
     }
-    // Step 8: retrieve the trends.
-    sleepTrend = await ts.trend({ userId, metric: "sleep" });
-    energyTrend = await ts.trend({ userId, metric: "energy" });
-    syncs.push({ integration: "tigerdata", mode: ts.backend === "tigerdata" ? "live" : "sandbox", ok: true, detail: `${appended} new point(s); sleep trend ${sleepTrend.direction}.` });
-  } catch (err) {
-    syncs.push({ integration: "tigerdata", mode: "live", ok: false, detail: `Tiger Data failed: ${err instanceof Error ? err.message : String(err)}` });
   }
 
   // Step 9: contextual, non-diagnostic follow-up.
-  const followUp = composeFollowUp(sleepTrend, historical, active);
+  const followUp = composeFollowUp(sleepTrend, sleepHistory, historical, active);
 
   await opts.audit?.record({
     actor: "wellness",
@@ -168,5 +177,5 @@ export async function runWellnessTurn(opts: {
     detail: { saved: savedCount, duplicates, continuitySaved, historical: historical.length, syncs: syncs.map((s) => ({ i: s.integration, ok: s.ok })) },
   });
 
-  return { extraction, savedCount, duplicates, continuitySaved, historical, sleepTrend, energyTrend, followUp, syncs };
+  return { extraction, savedCount, duplicates, continuitySaved, historical, sleepTrend, energyTrend, sleepHistory, timeSeriesSync, followUp, syncs };
 }

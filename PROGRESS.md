@@ -190,3 +190,32 @@ scoped memory and approvals — no infrastructure duplicated.
   here, so all show sandbox; the live code paths activate when creds are added and
   are written to each provider's documented REST shape (live paths UNVERIFIED
   without creds).
+
+## Tiger Data: longitudinal wellness trends ✅
+End-to-end: Wellness extracts a timestamped observation -> Convex saves the
+canonical record -> the sync job mirrors approved numeric observations to Tiger
+Data -> Kinline queries weekly/monthly aggregates -> Wellness compares the current
+period with the person's own history -> the family dashboard shows the trend with
+evidence and uncertainty.
+- `src/integrations/tigerdata.ts`: real Tiger Data adapter (`pg`, postgres:// service
+  URL, hypertable, aggregates computed in SQL with timezone-aware `time_bucket`) and
+  a sandbox computing identical aggregates via the pure `aggregatePoints`. Replaces
+  the old adapter that called a non-existent HTTP `/sql` endpoint.
+- `src/agents/wellness/timeSeriesSync.ts`: the sync job. Reconciles (insert / update
+  corrected / remove deleted), idempotent on observation id, excludes records that
+  need confirmation, consent key `wellnessTimeSeriesSync` (off = purge the mirror,
+  Convex untouched), never throws, audited, records last-run freshness.
+  Fixes a real gap: deletions/corrections previously never reached the mirror (W29
+  only passed by resetting the in-memory provider; it now checks the same mirror).
+- `src/agents/wellness/longitudinalTrends.ts`: current period vs personal baseline;
+  "lower/higher" only when >= 0.5 and beyond the 95% noise interval, else "similar";
+  confidence + margin + plain reasons; evidence = canonical observations behind the
+  current period (quotes hidden from family unless `caregiverWellnessRaw`).
+- `GET/POST /api/wellness/trends`, `WellnessTrendsCard` on `/family` and `/wellness`
+  (bars + 95% whiskers + dashed "usual" line, hatched sparse weeks, hover tooltips,
+  evidence list, "Tell" box, labeled fictional demo-history button).
+- Evidence fix in `observationPolicy.ts`: the quote is the sentence stating the number.
+- Demo: `npm run demo:tigerdata` (multi-week sleep trend updates after a new
+  conversational observation, plus idempotency/correction/deletion/family/consent
+  checks). Tests: `tests/wellnessTimeSeries.test.ts` (13). Suite: 103 tests, 14 files.
+- Live path: set `TIGERDATA_SERVICE_URL=postgres://...`; UNVERIFIED here (no service).

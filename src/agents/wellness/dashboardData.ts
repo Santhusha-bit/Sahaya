@@ -14,7 +14,9 @@ import { AuditLog } from "@/agents/base/audit";
 import { wellnessIntegrationStatuses, cartesiaStatus, auth0Status, type IntegrationStatus } from "@/lib/env";
 import { getPersonalMemoryProvider, type ContinuityItem } from "@/integrations/moss";
 import { getVoiceProvider } from "@/integrations/cartesia";
-import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
+import { computeTrend, emptyTrend, getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
+import { getLongitudinalTrend, type LongitudinalTrend } from "./longitudinalTrends";
+import { syncWellnessTimeSeries } from "./timeSeriesSync";
 import { activeObservations, type StoredObservation } from "./wellnessStore";
 import {
   DEMO_HOUSEHOLD,
@@ -29,6 +31,8 @@ export interface WellnessDashboard {
   continuity: ContinuityItem[];
   sleepTrend: Trend;
   energyTrend: Trend;
+  sleepHistory: LongitudinalTrend;
+  energyHistory: LongitudinalTrend;
   report: { period: string; headline: string; lines: string[] };
   analytics: HouseholdAggregate[];
   consent: Record<string, boolean>;
@@ -53,18 +57,22 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
     continuity = [];
   }
 
-  // Trends (Tiger Data).
+  // Trends (Tiger Data). Run the sync job first so the mirror matches the
+  // canonical record, then read weekly comparisons with evidence + uncertainty.
   const ts = getTimeSeriesProvider();
-  let sleepTrend: Trend = { metric: "sleep", count: 0, average: null, latest: null, direction: "insufficient_data", points: [] };
-  let energyTrend: Trend = { metric: "energy", count: 0, average: null, latest: null, direction: "insufficient_data", points: [] };
+  let sleepTrend: Trend = emptyTrend("sleep");
+  let energyTrend: Trend = emptyTrend("energy");
+  await syncWellnessTimeSeries({ memory: wellness.memory, userId, consent });
   try {
-    [sleepTrend, energyTrend] = await Promise.all([
-      ts.trend({ userId, metric: "sleep" }),
-      ts.trend({ userId, metric: "energy" }),
-    ]);
+    const points = await ts.points({ userId });
+    sleepTrend = computeTrend(points, "sleep");
+    energyTrend = computeTrend(points, "energy");
   } catch {
     /* keep defaults */
   }
+  const [sleepHistory, energyHistory] = await Promise.all(
+    (["sleep", "energy"] as const).map((metric) => getLongitudinalTrend({ memory: wellness.memory, userId, metric, consent })),
+  );
 
   // Household analytics + monthly report (the elder views their own household).
   const householdId = householdForUser(userId);
@@ -93,6 +101,8 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
     continuity,
     sleepTrend,
     energyTrend,
+    sleepHistory,
+    energyHistory,
     report,
     analytics: analyticsRes.aggregates,
     consent,

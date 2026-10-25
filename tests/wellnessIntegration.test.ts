@@ -54,9 +54,12 @@ describe("full wellness turn", () => {
 
     const broken: TimeSeriesProvider = {
       backend: "tigerdata",
-      async append() { throw new Error("down"); },
-      async range() { throw new Error("down"); },
-      async trend() { throw new Error("down"); },
+      async status() { return { backend: "tigerdata" as const, mode: "unavailable" as const, detail: "down" }; },
+      async upsert() { throw new Error("down"); },
+      async remove() { throw new Error("down"); },
+      async purgeUser() { throw new Error("down"); },
+      async points() { throw new Error("down"); },
+      async aggregate() { throw new Error("down"); },
     };
     setTimeSeriesProvider(broken);
     const r = await runWellnessTurn({ text: "I slept three hours.", memory: w.memory, userId: "margaret", consent: DEFAULT_CONSENT });
