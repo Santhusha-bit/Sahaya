@@ -1,265 +1,531 @@
 # Sahaya
 
-**Four independent AI agents in one installable care companion.**
+Sahaya is a voice-first companion app for older adults and the families who look
+after them. Instead of one chatbot, it runs four separate AI agents (Guardian, Care,
+Wellness and Finance), each with its own prompt, tools, scoped memory and approval
+policy. Agents read, compare and propose; anything sensitive (alerting family,
+placing an order, sending a dispute letter, reading a bank account) waits for a
+person to approve it, and that rule is enforced in code, not in a prompt.
 
-Sahaya is a mobile-first PWA for older adults and their families. It is **not** one
-chatbot with four prompts — it runs four separately instantiated agents, each with its
-own persona, tool registry, scoped memory, approval policy, workflows and event
-handlers. They share infrastructure but never each other's private data; they
-collaborate only through a controlled, permission-checked event bus.
+- Live app: https://sahaya-mu.vercel.app
+- Landing page: https://sahaya-landing-pink.vercel.app (source in [`landing/`](landing/))
 
-| Agent | Does | Never does |
+Every external service is optional. With no keys at all, the app runs in sandbox
+mode: the same tools, approvals, memory and event bus run against local stand-ins,
+and each integration is labeled `live`, `sandbox` or `unavailable` on the Profile
+page and at `/api/status`.
+
+## Contents
+
+- [The four agents](#the-four-agents)
+- [Architecture](#architecture)
+- [How we use each service](#how-we-use-each-service)
+- [Safety design](#safety-design)
+- [Getting started](#getting-started)
+- [Deployment](#deployment)
+
+## The four agents
+
+| Agent | What it does | Main screens |
 |---|---|---|
-| **Guardian** 🛡️ | Scam analysis, verification, emergencies, trusted-contact alerts, human assistance | meds, money, check-ins |
-| **Care** ❤️ | Medications, grocery lists, carts, orders, meals, pantry | safety, money analysis, emotions |
-| **Wellness** ✨ | Daily check-ins, mood/sleep/social observations, longitudinal trends, family calls | medical advice, bills, safety response |
-| **Finance** 🧾 | Bill breakdowns, insurance/invoice audits, recurring charges, disputes, projections | meds, groceries, safety |
+| **Guardian** | Scam protection. Screens messages and live calls for scam tactics, verifies callers, alerts trusted contacts, answers "has someone tried this scam before?" from the person's own incident history, and coordinates help requests from the other agents. | `/agents/guardian`, `/call`, `/approvals` |
+| **Care** | Groceries, meals and shopping. Builds carts from order history and preferences, discovers and price-checks products, turns a fridge photo into a dinner plan, and ends at a sandbox checkout that needs the person's approval. | `/agents/care`, `/shop`, `/groceries`, `/care/pantry` |
+| **Wellness** | Daily check-ins, mood/sleep/social observations, continuity between conversations ("how was your granddaughter's visit?"), weekly and monthly trends, and a consented family care report. Never gives medical advice. | `/agents/wellness`, `/wellness` |
+| **Finance** | Spending review on a sandbox bank account, credit and identity review, and medical bill investigation (bill vs. insurance EOB) that drafts a dispute letter for approval. Never moves money. | `/agents/finance`, `/money`, `/finance/case`, `/finance/investigate` |
 
-## Quick start
-
-```bash
-npm install
-cp .env.example .env.local   # optional — everything runs without any keys
-npm run dev                  # http://localhost:3000
-npm test                     # isolation + cross-agent permission tests
-```
-
-**No API keys required.** With keys absent, Sahaya runs in **sandbox mode**: a
-deterministic per-agent planner drives the *same* real tools, approvals, memory and
-event bus — so every workflow is demonstrable offline. Add keys to go live.
-
-### Scam-call demo (Cartesia voice)
-
-- **In the app:** open `/call` and press **Play demo scam call**. A Cartesia voice
-  plays a fictional "grandson" asking for gift cards; Cartesia streaming STT
-  (ink-whisper) transcribes that audio in the browser; Claude + the deterministic
-  rules screen it; Guardian warns you privately in its own Cartesia voice and logs
-  an incident. Real two-person calls work the same way: the protected person's
-  browser transcribes the caller's incoming WebRTC audio with Cartesia, so the
-  caller needs no special browser. Browsers only get a short-lived, STT-only
-  token from `/api/voice/stt-token`; the API key stays on the server.
-- **Headless:** `npm run demo:scam-call` runs the same loop in Node (Cartesia TTS ->
-  Cartesia STT -> screening -> Guardian) and saves the caller and warning audio to
-  your temp folder. Alerts stay in-app.
+Agents never read each other's private memory. They cooperate only through a
+permission-checked event bus (for example Wellness -> Guardian for a safety concern,
+Care -> Finance for a payment review), and only for workflows the person consented to.
 
 ## Architecture
 
 ```
+src/app/                Next.js 15 App Router: PWA pages + /api routes
 src/agents/
-  base/
-    BaseAgent.ts        reusable runtime: processMessage / processVoiceInput /
-                        retrieveMemory / planTask / executeTool / requestApproval /
-                        handleEvent / scheduleTask / getTaskStatus / initialize
-    AgentEventBus.ts    controlled cross-agent collaboration (Convex-backed)
-    ScopedMemory.ts     per-agent memory namespace isolation + shared-memory permissions
-    ToolRegistry        each agent's tools (zod-validated, approval-gated, error-handled)
-    policy.ts           ALL authorization in one place: memory perms + cross-agent rules
-    services.ts         TaskService / ApprovalService
-    dataLayer.ts        Convex when configured, else in-process (same interface)
-  guardian/ care/ wellness/ finance/   <AgentId>Agent.ts + <id>Prompt.ts + <id>Tools.ts
-  registry.ts  service.ts  consent.ts
-convex/                  schema + functions (memories, events, tasks, approvals, conversations)
-src/app/                 PWA: home, /agents, /agents/[agent], /activity, /family, /profile + /api/*
+  base/                 BaseAgent runtime, ToolRegistry, ScopedMemory, AgentEventBus,
+                        policy.ts (all authorization), approvals, workItems (code gate),
+                        audit log, dataLayer (Convex or in-process)
+  guardian/ care/ wellness/ finance/
+                        each agent: <Agent>.ts + prompt + tools + workflows
+  registry.ts service.ts consent.ts
+src/integrations/       one adapter per external service, each with a sandbox twin
+src/analytics/          household / family care report exports (Snowflake)
+src/redteam/            adversarial suites for Guardian and Wellness
+src/lib/env.ts          the single source of truth for live/sandbox/unavailable status
+convex/                 schema + functions (memories, events, tasks, approvals, conversations)
+services/uagents/       Python Fetch.ai uAgents, one process per agent
+actors/                 Apify Actor source (grocery product discovery)
+landing/                marketing site (separate Vercel project)
+scripts/                terminal demos and red-team runners
 ```
 
-### Isolation (prompt §4)
-`ScopedMemory` is bound to one agent id and physically forces `namespace = agentId` on
-every read and write. There is no API to address another agent's namespace. Shared
-household/user memory is reachable only with the permission declared in
-`AGENT_PERMISSIONS`. Even `get(id)` refuses to return a record from another namespace.
+- **Agent runtime.** `BaseAgent` handles messages and voice input, plans with Claude
+  (or a deterministic planner in sandbox), and executes zod-validated tools from that
+  agent's own registry.
+- **Approval gate.** Tools flagged `requiresApproval` do not run; the runtime records
+  an approval and returns `awaiting_approval`. Approval is bound to the exact payload
+  (cart hash and total, letter fingerprint and recipient, quote), so a changed request
+  needs a new approval.
+- **Work items and audit.** Cross-agent and high-risk actions become work items whose
+  history is a SHA-256 hash chain. The code gate checks reviewer role, dual control
+  for high-risk actions, input hash, expiry and single use before anything executes.
+- **Data layer.** Convex is the canonical store for memory, events, tasks, approvals
+  and conversations. Without Convex the same interface runs in process memory.
+- **Agent processes.** With Fetch.ai configured, Wellness, Care, Finance and Guardian
+  each also run as their own Python uAgent and exchange signed messages; the
+  TypeScript agents remain the decision makers.
 
-### Cross-agent collaboration (prompt §5)
-The only channel between agents is `AgentEventBus.publish()`, which enforces, in order:
-1. an explicit rule exists in `CROSS_AGENT_RULES` for `(source, target, type)`;
-2. the user has consented to that specific workflow;
-3. the payload validates against the rule's **narrow** zod schema — so entire private
-   conversations can never cross; unknown fields are stripped.
+## How we use each service
 
-Disallowed events are still recorded (`blocked` / `rejected`) for the audit trail shown
-on **Activity**, but never delivered. Wired workflows: Wellness→Guardian (safety),
-Care→Guardian (assistance), Care→Finance (payment review), Wellness→Care (meal help).
+Each service has an adapter in `src/integrations/` and a status function in
+`src/lib/env.ts`. "Without keys" describes exactly what the code does when the env
+vars are missing.
 
-### Approvals (prompt §9)
-Tools flagged `requiresApproval` (emergency dispatch, notifying contacts, placing
-orders, committing money) defer: the runtime creates an `Approval` and returns
-`awaiting_approval` instead of executing. Approving it re-runs the tool with the gate
-lifted. Shown as action cards in each agent's UI.
+### Platform (all agents)
 
-## Integrations — honestly labeled (prompt criterion 12)
+#### Claude (Anthropic)
+- **What it does:** the reasoning model for all four agents: conversation, planning
+  and tool use (default model `claude-opus-4-8`, adaptive thinking on unless
+  `AGENT_THINKING=off`). It is also used for specific advisory jobs whose output code
+  validates before use: screening live call transcripts (Guardian), summarizing past
+  scam incidents (Guardian), categorizing bank transactions (Finance), explaining
+  credit findings (Finance), and comparing bill and EOB documents (Finance).
+- **Files:** `src/lib/llm.ts`, `src/agents/base/BaseAgent.ts`,
+  `src/integrations/callScreening.ts`, `src/agents/guardian/incidentSummary.ts`,
+  `src/agents/finance/nessie/classify.ts`, `src/agents/finance/credit/creditReview.ts`,
+  `src/agents/finance/investigation/analyst.ts`
+- **Env:** `ANTHROPIC_API_KEY`, optional `AGENT_MODEL`, `AGENT_THINKING`, `AGENT_MAX_TOKENS`
+- **Without keys:** a deterministic per-agent planner drives the same tools, approvals
+  and memory. Call screening uses only the deterministic scam rules, and summaries and
+  explanations fall back to code templates.
 
-Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
-`/api/status`:
+#### Convex
+- **What it does:** the primary backend. Stores each agent's scoped memories, the
+  cross-agent event log, tasks, approvals and conversations. It is the canonical
+  record that Moss, Backboard, Tiger Data and Snowflake are checked against.
+- **Files:** `convex/`, `src/agents/base/dataLayer.ts`
+- **Env:** `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOYMENT` (run `npm run convex:dev`)
+- **Without keys:** an in-process store with the same interface (data resets when the
+  server restarts).
 
-| Integration | Live when… | Fallback |
+#### Cartesia (voice)
+- **What it does:** `sonic-3` text-to-speech for agent replies (Care, Wellness) and for
+  Guardian's private call warnings; `ink-whisper` streaming speech-to-text for the
+  caller's audio in screened calls. Browsers receive a short-lived, STT-only token from
+  `/api/voice/stt-token`; the API key never leaves the server.
+- **Files:** `src/integrations/cartesia.ts`, `src/lib/cartesiaStt.ts`,
+  `src/app/api/voice/`
+- **Env:** `CARTESIA_API_KEY`, optional `CARTESIA_VOICE_ID`, `CARTESIA_CALLER_VOICE_ID`
+- **Without keys:** the browser's built-in SpeechSynthesis and SpeechRecognition.
+
+#### Auth0 (authentication)
+- **What it does:** sign-in for the person or caregiver using `@auth0/nextjs-auth0` v4:
+  login at `/auth/login`, callback at `/auth/callback`, logout at `/auth/logout`. Agents
+  act for the signed-in user, and Wellness and Finance can report whether they are
+  acting for a verified Auth0 session or the demo user.
+- **Files:** `src/lib/user.ts`, `src/lib/env.ts` (`auth0Status`)
+- **Env:** `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_SECRET`,
+  `APP_BASE_URL`
+- **Without keys:** single-user demo mode with a fixed demo user and no sign-in.
+
+#### Fetch.ai uAgents (agent-to-agent messaging)
+- **What it does:** Wellness, Care and Finance each have their own Python uAgent, and
+  Guardian has one too, each a separate OS process with its own identity. A help
+  request (for example Wellness asking Guardian to coordinate grocery help) travels
+  as a signed uAgents envelope between processes; the Guardian uAgent verifies the
+  sender and forwards to the app's Guardian intake, and the task id and status ride
+  back the same way. Only the minimum data crosses (need, urgency, consent reference).
+- **Files:** `src/integrations/fetchai.ts`, `services/uagents/`,
+  `src/app/api/bridge/guardian/assistance/route.ts`, `src/app/api/bridge/logs/route.ts`
+- **Env:** `FETCHAI_WELLNESS_URL`, `FETCHAI_CARE_URL`, `FETCHAI_FINANCE_URL`
+  (`FETCHAI_BRIDGE_URL` is the legacy Wellness name), `FETCHAI_GUARDIAN_URL`,
+  `SAHAYA_BRIDGE_TOKEN` (shared secret, required in production)
+- **Without keys:** the identical exchange runs on the in-process event bus and Fetch.ai
+  is labeled `unavailable`. A configured but unreachable uAgent is reported as a
+  rejection, not silently swapped for the in-process path.
+
+#### Atlassian Jira (controlled actions)
+- **What it does:** sensitive and cross-agent actions (for example Guardian delegating
+  work to Finance) become work items that mirror to Jira issues as the human review
+  surface, with two-way status sync. A Jira status alone never authorizes execution:
+  the code gate in `workItems.ts` still checks the hash-chained history, reviewer roles,
+  dual control, input hash, expiry and single use. A Jira transition only counts if the
+  Jira account is bound to a known reviewer.
+- **Files:** `src/integrations/jira.ts`, `src/agents/base/workItems.ts`,
+  `src/agents/base/workItemPolicy.ts`, `src/app/api/work-items/route.ts`, `/approvals`
+- **Env:** `ATLASSIAN_SITE`, `ATLASSIAN_EMAIL`, `ATLASSIAN_API_TOKEN`,
+  `ATLASSIAN_PROJECT_KEY`, optional `ATLASSIAN_REVIEWER_ACCOUNTS`,
+  `ATLASSIAN_APPROVE_STATUSES`, `ATLASSIAN_REJECT_STATUSES`
+- **Without keys:** a local work-item store with the same interface and dashboard. The
+  execution gate is enforced the same way.
+
+### Guardian (scam protection)
+
+#### WebRTC + Claude (scam-call screening)
+- **What it does:** in-app calls at `/call` run peer to peer over WebRTC (the server only
+  relays the SDP offer and answer). The protected person's browser transcribes the
+  caller's audio (Cartesia STT when configured) and sends the rolling transcript to
+  `/api/voice/call/[room]/screen`. Claude and the deterministic scam-signal detector
+  both read it; once the combined risk is high, the full Guardian workflow runs once per
+  call: the policy decides, the incident is recorded, caregivers are alerted, and
+  Guardian warns the person privately. "Play demo scam call" simulates a fictional
+  grandson asking for gift cards.
+- **Files:** `src/integrations/webrtc.ts`, `src/integrations/callScreening.ts`,
+  `src/app/api/voice/call/`, `src/app/call/page.tsx`
+- **Env:** uses `ANTHROPIC_API_KEY` and `CARTESIA_API_KEY`; optional `WEBRTC_ICE_SERVERS`
+  (JSON `RTCIceServer[]`, defaults to Google public STUN)
+- **Without keys:** calls are screened by the deterministic scam rules only. Call rooms
+  live in process memory, so both peers must reach the same server instance.
+
+#### Elasticsearch (incident search)
+- **What it does:** after each scam incident is saved, an indexing job writes a
+  PII-redacted, field-allowlisted projection to Elasticsearch so the person (and
+  authorized caregivers) can ask "has someone tried this scam before?". Search is
+  full-text over the redacted text and tactics plus boosted matches on scam signals,
+  always filtered to the caller's own user id. Claude writes the plain-language answer,
+  but code rejects a draft that cites unknown incidents, misses the top match, or
+  claims it was the "same caller".
+- **Files:** `src/integrations/search.ts`, `src/agents/guardian/incidentIndexer.ts`,
+  `src/agents/guardian/incidentSummary.ts`
+- **Env:** `ELASTIC_URL`, `ELASTIC_API_KEY`, optional `ELASTIC_INDEX`
+- **Without keys:** a local in-memory index with the same interface.
+
+#### Armadin (adversarial testing)
+- **What it does:** reserved for an external adversarial-testing API. No Armadin API
+  calls exist in the code today; adversarial testing is done by Sahaya's own red-team
+  suites (`npm run redteam`, `npm run redteam:wellness`).
+- **Files:** `src/lib/env.ts` (`armadinStatus`), `src/redteam/`
+- **Env:** `ARMADIN_API_KEY`
+- **Without keys:** labeled `unavailable`; the local red-team suites run either way.
+
+### Care (groceries, meals, shopping)
+
+#### Apify (product search for voice shopping)
+- **What it does:** on `/shop`, after Care works out the person's usual items, it
+  searches real product listings by running an Apify Actor (default
+  `apify~e-commerce-scraping-tool`, keyword search) and normalizes the results for
+  Care's substitution policy and cart.
+- **Files:** `src/integrations/apify.ts`, `src/agents/care/shopping/service.ts`
+- **Env:** `APIFY_TOKEN`, optional `APIFY_ACTOR_ID`, `APIFY_MARKETPLACES`, `APIFY_TIMEOUT_MS`
+- **Without keys:** a local store catalog with the same interface. When live, any item
+  the search cannot find falls back to the catalog for that item only and is labeled.
+
+#### Apify (live grocery product discovery)
+- **What it does:** on `/groceries`, Care sends a shopping list to our own Grocery
+  Product Discovery Actor (source in `actors/grocery-product-discovery`) and reads back
+  normalized offers: names, prices, availability and source URLs. The run id and Apify
+  Console link are shown as proof of a real run. All returned data is treated as
+  untrusted: schema-validated, sanitized, URL-restricted and price-bounded before any
+  agent or model sees it.
+- **Files:** `src/integrations/apifyGrocery.ts`, `src/agents/care/groceryWorkflow.ts`,
+  `actors/grocery-product-discovery/`
+- **Env:** `APIFY_TOKEN`, `APIFY_GROCERY_ACTOR_ID`, optional `GROCERY_DISCOVERY_MODE`
+  (`local` or `sandbox`)
+- **Without keys:** the Actor's own discovery code runs in-process against Open Prices
+  (real prices, but not an Apify run, and labeled `sandbox`). `GROCERY_DISCOVERY_MODE=sandbox`
+  uses an offline fixture catalog.
+
+#### Bright Data (public price verification)
+- **What it does:** Apify discovers a product; Bright Data verifies its price. Care sends
+  only the product name to Google Shopping through the Bright Data SERP API, then
+  validates every listing in code (USD only, http(s) links, injected instructions
+  dropped), normalizes sizes to a unit price, flags suspiciously cheap listings, marks
+  results older than 24 hours as stale, and reports whether the usual price is fair.
+  A chosen listing only goes into a draft cart; buying still needs approval.
+- **Files:** `src/integrations/brightdata.ts`, `src/agents/care/priceCompare.ts`
+- **Env:** `BRIGHTDATA_API_TOKEN`, `BRIGHTDATA_SERP_ZONE`
+- **Without keys:** clearly labeled sample listings with the same interface (not live prices).
+
+#### Visa checkout + order tracking (sandbox)
+- **What it does:** the end of the `/shop` voice flow. The person taps "Approve and pay";
+  the approval is bound to the cart id, hash and total, and checkout refuses a changed,
+  superseded, already-ordered or over-limit cart. A spoken "yes" never approves. The
+  checkout uses a saved Visa test card reference (no card number is stored) and
+  returns a sandbox order with a placed, packed, out for delivery, delivered timeline.
+- **Files:** `src/integrations/checkout.ts`, `src/agents/care/shopping/`
+- **Env:** optional `SHOP_TRACKING_STEP_MS` (tracking pace)
+- **Without keys:** this integration is always sandbox. No money moves.
+
+#### Google Gemini (pantry photo vision)
+- **What it does:** on `/care/pantry`, the person photographs their fridge or pantry
+  (downscaled in the browser, never stored). Gemini's only job is to propose visible
+  ingredients. Code validates the result, holds back items under 75% confidence, rejects
+  text read off notes or labels, and makes the person confirm uncertain items before the
+  deterministic meal planner proposes a recipe and a list of missing items.
+- **Files:** `src/integrations/gemini.ts`, `src/agents/care/pantryPolicy.ts`,
+  `src/agents/care/mealPlanner.ts`, `src/app/api/care/pantry/route.ts`
+- **Env:** `GEMINI_API_KEY`, optional `GEMINI_MODEL` (default `gemini-3.8-flash`),
+  `GEMINI_BASE_URL`
+- **Without keys:** a fixed sample fridge detection (the photo is not analyzed); the same
+  validation, confirmation and planning apply.
+
+#### Coinbase x402 (paid agent services)
+- **What it does:** Care can buy product-comparison data from a paid service at
+  `/api/x402/product-compare` using the x402 protocol (HTTP 402 Payment Required). Care
+  signs an EIP-3009 USDC authorization and the service verifies and settles it through
+  the x402 facilitator, in Base Sepolia test USDC only; mainnet is refused in code. An
+  optional experiment (`FINANCE_X402_REPORTS=on`) lets Finance buy benchmark reports
+  from `/api/x402/financial-report`, always in sandbox and only after approving the
+  exact quote.
+- **Files:** `src/integrations/x402.ts`, `src/agents/care/paidServices/`,
+  `src/agents/finance/paidReports/`, `src/app/api/x402/`
+- **Env:** `X402_WALLET_PRIVATE_KEY` (a testnet wallet only), `X402_PAY_TO`, optional
+  `X402_FACILITATOR_URL`, `X402_SERVICE_URL`, `FINANCE_X402_REPORTS`
+- **Without keys:** a throwaway key signs the same authorizations and a local verifier
+  checks signature, payee, amount, time window and nonce. Nothing settles and no funds move.
+
+### Wellness (check-ins, memory, trends)
+
+#### Bitdeer AI Model Studio (observation extraction)
+- **What it does:** extracts structured wellness observations (mood, sleep, social
+  contact) from privacy-minimized check-in text through Bitdeer's OpenAI-compatible
+  inference API. The model is advisory: output is schema-validated and every
+  observation must be grounded in evidence from the text before it is used.
+- **Files:** `src/integrations/bitdeer.ts`, `src/agents/wellness/extractObservations.ts`
+- **Env:** `BITDEER_API_KEY`, optional `BITDEER_MODEL` (default
+  `deepseek-ai/DeepSeek-V4-Flash`), `BITDEER_BASE_URL`, `BITDEER_THINKING`
+- **Without keys:** a deterministic offline extractor with the same interface, under
+  the same validation.
+
+#### Moss (continuity retrieval)
+- **What it does:** holds short, minimized, consented continuity cues derived from
+  accepted observations ("how she has been"), keyed by opaque ids and a pseudonymous
+  subject, so Wellness can follow up across conversations. Convex stays canonical, and
+  Wellness only asks Moss for document ids that Convex says belong to the user. Never
+  receives raw conversation text.
+- **Files:** `src/integrations/moss.ts`, `src/agents/wellness/continuityMemory.ts`
+- **Env:** `MOSS_PROJECT_ID`, `MOSS_PROJECT_KEY` (or `MOSS_API_KEY`), `MOSS_INDEX_NAME`,
+  `MOSS_SUBJECT_SALT` (set in production). Check with `npm run moss:verify`.
+- **Without keys:** an in-process index with the same semantics.
+
+#### Backboard (long-term conversational context)
+- **What it does:** indexes life-context facts the person chose to share (hobbies,
+  family visits, plans) in a separate Backboard assistant per user, so Wellness can pick
+  up a thread days later. Backboard is treated as untrusted: every hit is re-verified
+  against the Convex record (version, timestamps, consent) before use. No transcripts,
+  no health observations.
+- **Files:** `src/integrations/backboard.ts`, `src/agents/wellness/conversationContext.ts`
+- **Env:** `BACKBOARD_API_KEY`, optional `BACKBOARD_BASE_URL`
+- **Without keys:** an in-process index with the same interface and the same re-verification.
+
+#### Tiger Data (wellness time series)
+- **What it does:** a sync job mirrors approved numeric observations (sleep, energy) into
+  a TimescaleDB hypertable on Tiger Data; weekly and monthly trends are computed in the
+  database with `time_bucket` and shown on `/wellness`. Points are keyed by the canonical
+  observation id, so re-syncs are idempotent and deletions and corrections propagate.
+- **Files:** `src/integrations/tigerdata.ts`, `src/agents/wellness/timeSeriesSync.ts`,
+  `src/agents/wellness/longitudinalTrends.ts`, `src/app/api/wellness/trends/route.ts`
+- **Env:** `TIGERDATA_SERVICE_URL` (a `postgres://` URL; `TIMESCALE_SERVICE_URL` and a
+  `postgres://` `TIGERDATA_URL` are also accepted)
+- **Without keys:** an in-process time-series store computing the same aggregates.
+
+#### Snowflake (household analytics and family care report)
+- **What it does:** receives only de-identified household data: numeric Wellness
+  aggregates (`household_analytics`) and consented Care facts reduced to category,
+  outcome and day (`household_care_facts`). The monthly family care summary is computed
+  in Snowflake with a single `GROUP BY` through the SQL REST API, and Sahaya reads back
+  only the aggregate. Every row is schema-checked before export, so an extra field such
+  as a name or note is rejected.
+- **Files:** `src/integrations/snowflake.ts`, `src/agents/wellness/householdAnalytics.ts`,
+  `src/analytics/householdCareExport.ts`, `src/analytics/familyCareReport.ts`,
+  `src/app/api/household/report/route.ts`
+- **Env:** `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_TOKEN`, optional `SNOWFLAKE_TOKEN_TYPE`,
+  `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`, `SNOWFLAKE_ROLE`
+- **Without keys:** aggregates and the monthly summary are computed locally; nothing
+  leaves the device.
+
+### Finance (spending, credit, bills)
+
+#### Capital One Nessie (sandbox bank data)
+- **What it does:** on `/money`, Finance asks for read-only access to a checking account
+  (an approval card), then reads purchases only from that authorized account. Claude
+  categorizes them (labels validated in code), and code finds possible double charges,
+  subscriptions and price increases. Suggestions only draft a dispute or add a to-do.
+  Only the last four digits of the account are stored, and Finance has no tool that
+  creates purchases.
+- **Files:** `src/integrations/nessie.ts`, `src/agents/finance/nessie/`,
+  `src/app/api/finance/bank/route.ts`
+- **Env:** `NESSIE_API_KEY`, optional `NESSIE_BASE_URL`
+- **Without keys:** a local emulator that mirrors Nessie's request and response shapes.
+
+#### CRS Credit API (credit and identity review)
+- **What it does:** when the person asks Finance for a credit or identity check, and
+  after approval and consent, Finance requests a TransUnion credit report, TransUnion
+  identity verification and AtData FraudFinder results from the CRS sandbox for the
+  linked CRS test identity. Code turns the fields into evidence-backed findings and
+  changes since the last review; Claude explains them (validated in code); next steps
+  come from a fixed table. Production CRS hosts and non-test SSNs are refused, and the
+  SSN is never stored. CRS does not provide bank transaction monitoring.
+- **Files:** `src/integrations/crs.ts`, `src/integrations/crsFixtures.ts`,
+  `src/agents/finance/credit/`
+- **Env:** `CRS_USERNAME`, `CRS_PASSWORD`, optional `CRS_LINKED_PERSONA` (default `P13`),
+  `CRS_TEST_PERSONAS`, `CRS_TU_CONFIG`, `CRS_FRAUD_CONFIG`
+- **Without keys:** an offline fixture shaped like a recorded CRS sandbox response for
+  test persona P13. No CRS call is made.
+
+#### Hyphenate track: bill investigation and sandbox billing office
+- **What it does:** on `/finance/case`, the person uploads a hospital statement and an
+  insurance EOB (samples in `public/samples/`). Finance extracts both with a deterministic
+  parser (every fact keeps its source line and the document's SHA-256), reconciles them
+  in code, keeps Claude's flags only when the rules engine agrees, and drafts a dispute
+  letter. The person approves the exact letter (bound to case, draft fingerprint and
+  recipient), Finance submits it to the billing office, tracks the response and verifies
+  the corrected balance. Every step goes into a SHA-256 hash-chained case audit trail
+  that can be exported as an evidence packet. Hospitals expose no public dispute API,
+  so the billing office is always a simulation.
+- **Files:** `src/agents/finance/investigation/`, `src/integrations/billingOffice.ts`
+- **Env:** optional `FINANCE_CASE_STEP_MS`, `FINANCE_BILLING_SCENARIO=partial`
+- **Without keys:** always sandbox. Nothing is sent outside the app.
+
+#### Factory Droid SDK (bill investigation worker)
+- **What it does:** on `/finance/investigate`, Finance hands a bill investigation to a
+  separate Droid run. Sahaya, not the model, scopes it: an empty throwaway working
+  directory, every built-in Droid tool (shell, files, web) disabled, only Sahaya's
+  read-only calculation tools exposed, and the authorized documents attached. Finance
+  then checks the Droid's report against its own recomputation before explaining it and
+  drafting a dispute that needs approval.
+- **Files:** `src/integrations/factoryDroid.ts`, `src/agents/finance/investigation/service.ts`
+- **Env:** `FACTORY_API_KEY`, optional `FACTORY_DROID_MODEL`, `FACTORY_DROID_TIMEOUT_MS`,
+  `DROID_EXEC_PATH`
+- **Without keys:** labeled `unavailable`; the investigation runs on Finance's local
+  calculation engine and is labeled as such.
+
+### Summary table
+
+| Service | Agent | Live when set | Without it |
+|---|---|---|---|
+| Claude | all | `ANTHROPIC_API_KEY` | deterministic planner and rules |
+| Convex | all | `NEXT_PUBLIC_CONVEX_URL` | in-process store |
+| Cartesia | all (voice), Guardian calls | `CARTESIA_API_KEY` | browser speech APIs |
+| Auth0 | all | `AUTH0_DOMAIN` + `AUTH0_CLIENT_ID` (+ secret, `AUTH0_SECRET`, `APP_BASE_URL`) | single demo user |
+| Fetch.ai uAgents | Wellness, Care, Finance -> Guardian | `FETCHAI_*_URL` | in-process bus (`unavailable`) |
+| Atlassian Jira | Guardian, Care, Finance work items | 4 `ATLASSIAN_*` vars | local work-item store |
+| WebRTC + Claude | Guardian | `ANTHROPIC_API_KEY` | deterministic scam rules |
+| Elasticsearch | Guardian | `ELASTIC_URL` + `ELASTIC_API_KEY` | in-memory index |
+| Armadin | red team | `ARMADIN_API_KEY` | local red-team suites (`unavailable`) |
+| Apify (product search) | Care | `APIFY_TOKEN` | local store catalog |
+| Apify (grocery Actor) | Care | `APIFY_TOKEN` + `APIFY_GROCERY_ACTOR_ID` | Actor code in-process on Open Prices |
+| Bright Data | Care | `BRIGHTDATA_API_TOKEN` + `BRIGHTDATA_SERP_ZONE` | labeled sample listings |
+| Visa checkout | Care | always sandbox | sandbox checkout, test card reference |
+| Gemini | Care | `GEMINI_API_KEY` | fixed sample detection |
+| Coinbase x402 | Care (Finance optional) | `X402_WALLET_PRIVATE_KEY` + `X402_PAY_TO` | local verifier, nothing settles |
+| Bitdeer | Wellness | `BITDEER_API_KEY` | offline extractor |
+| Moss | Wellness | `MOSS_PROJECT_ID` + key + `MOSS_INDEX_NAME` | in-process index |
+| Backboard | Wellness | `BACKBOARD_API_KEY` | in-process index |
+| Tiger Data | Wellness | `TIGERDATA_SERVICE_URL` | in-process time series |
+| Snowflake | Wellness, family report | `SNOWFLAKE_ACCOUNT` + `SNOWFLAKE_TOKEN` | computed locally |
+| Capital One Nessie | Finance | `NESSIE_API_KEY` | local Nessie emulator |
+| CRS Credit API | Finance | `CRS_USERNAME` + `CRS_PASSWORD` | recorded P13 fixture |
+| Billing office (Hyphenate) | Finance | always sandbox | simulated billing office |
+| Factory Droid | Finance | `FACTORY_API_KEY` | local calculation engine (`unavailable`) |
+
+## Safety design
+
+- **Agents propose, people approve.** Sensitive tools cannot execute without an approval
+  bound to the exact payload. Approvals expire and are single use; a changed cart,
+  letter or quote needs a new one.
+- **Security lives in code, not prompts.** Every model (Claude, Gemini, Bitdeer) is
+  advisory. Policies such as `scamPolicy`, `pantryPolicy`, `observationPolicy`,
+  `x402Policy` and the work-item gate make the decisions, and a model miss can never
+  lower a risk level.
+- **Untrusted input stays untrusted.** Call transcripts, messages, scraped listings,
+  Actor output and uploaded documents are validated and sanitized before any agent or
+  model sees them, and text that looks like injected instructions is dropped.
+- **Isolation and consent.** Each agent's memory is namespaced and cannot be addressed
+  by another agent. Cross-agent events need an explicit rule, the person's consent for
+  that workflow, and a narrow payload schema, so whole conversations never cross.
+  Blocked events are still recorded on `/activity`.
+- **Red-team suites.** `src/redteam/` holds adversarial cases for Guardian's scam
+  workflow and for the Wellness data path (consent bypass, cross-user access, deleted
+  memory reappearing, duplicate analytics, and more). They run against the real deterministic layers via
+  `npm run redteam` and `npm run redteam:wellness`, and in `npm test`.
+- **No real money moves.** Checkout is a sandbox with a test card reference, Nessie
+  holds fake money, x402 is testnet-only (mainnet refused in code), CRS is sandbox-only,
+  and the billing office is simulated. Finance has no tool that moves money or
+  creates purchases.
+- **Tamper-evident audit.** Work-item histories and Finance case trails are SHA-256
+  hash chains; the execution gate refuses to act on a broken chain, and a case's
+  evidence packet can be re-verified by a third party.
+
+## Getting started
+
+Requirements: Node 20 or newer. Python 3 only if you want to run the Fetch.ai uAgents.
+
+```bash
+npm install
+cp .env.example .env.local   # optional: every key is optional
+npm run dev                  # http://localhost:3000
+```
+
+Open the Profile page (or `/api/status`) to see which integrations are live.
+
+Useful commands:
+
+```bash
+npm test             # vitest suite (isolation, permissions, workflows, integrations, red team)
+npm run typecheck    # tsc --noEmit
+npm run lint
+npm run build
+npm run convex:dev   # deploy the Convex schema + functions, then set NEXT_PUBLIC_CONVEX_URL
+```
+
+Fetch.ai uAgents (optional):
+
+```bash
+pip install -r services/uagents/requirements.txt
+npm run uagents      # starts the four uAgents (cd services/uagents && python bridge.py)
+```
+
+See [`services/uagents/README.md`](services/uagents/README.md) for ports and env vars.
+
+### Terminal demos
+
+Each demo runs the real workflow in Node and uses live services when their keys are in
+`.env.local`, sandbox otherwise.
+
+| Command | What it shows |
+|---|---|
+| `npm run demo:agents` | Wellness asks Guardian for help with consent (in-process bus, or uAgents with `FETCHAI_BRIDGE_URL`) |
+| `npm run demo:scam` | Guardian screening a scam message |
+| `npm run demo:scam-call` | Cartesia TTS -> Cartesia STT -> call screening -> Guardian warning |
+| `npm run demo:search` | "has someone tried this scam before?" over Elasticsearch |
+| `npm run demo:approval` | work items, dual control, hash-chained audit, Jira sync |
+| `npm run demo:a2a` | Wellness -> Guardian over Fetch.ai uAgents (two processes) |
+| `npm run serve:guardian` | host the Guardian intake for the uAgents |
+| `npm run redteam` | Guardian adversarial suite |
+| `npm run demo:shopping` | voice shopping: cart, approval, sandbox checkout, tracking |
+| `npm run demo:groceries` | grocery discovery through the Apify Actor |
+| `npm run demo:prices` | Bright Data price verification (e.g. `npm run demo:prices -- eggs`) |
+| `npm run demo:pantry` | Gemini pantry photo to dinner (`-- fridge.jpg` for a real photo) |
+| `npm run demo:x402` | Care paying for product data over x402 |
+| `npm run demo:x402-finance` | Finance buying a report over x402 (sandbox, approval required) |
+| `npm run demo:bitdeer` | Bitdeer observation extraction |
+| `npm run demo:wellness-memory` | Wellness personal memory |
+| `npm run demo:moss-continuity` | Moss continuity cues |
+| `npm run moss:verify` | check Moss credentials and index |
+| `npm run demo:backboard` | Backboard long-term context with Convex re-verification |
+| `npm run demo:tigerdata` | Tiger Data weekly and monthly trends |
+| `npm run demo:snowflake` | Snowflake household analytics |
+| `npm run demo:household` | monthly family care report |
+| `npm run demo:wellness-full` | the full Wellness pipeline |
+| `npm run redteam:wellness` | Wellness adversarial suite |
+| `npm run demo:nessie` | Finance spending review on Nessie |
+| `npm run demo:credit` | Finance credit and identity review over CRS |
+| `npm run demo:finance-case` | bill vs. EOB case through approval and billing office |
+| `npm run demo:investigation` | bill investigation via Factory Droid |
+
+## Deployment
+
+Two Vercel projects deploy from this one repository:
+
+| Project | Root directory | URL |
 |---|---|---|
-| **Claude** (`claude-opus-4-8`, adaptive thinking, tool use) | `ANTHROPIC_API_KEY` set | deterministic sandbox planner |
-| **Convex** (primary backend / event store) | `NEXT_PUBLIC_CONVEX_URL` set | in-process store |
-| **Cartesia** (sonic-3 TTS + ink-whisper STT) | `CARTESIA_API_KEY` set | browser SpeechSynthesis / SpeechRecognition |
-| **Auth0** | `AUTH0_DOMAIN`+`AUTH0_CLIENT_ID` set | single demo user |
-| **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
-| **Apify** (grocery product search) | `APIFY_TOKEN` set | sandbox store catalog (per item, labeled) |
-| **Checkout + tracking** | never (no commerce credentials) | sandbox checkout, Visa test-card reference, demo-paced tracking |
-| **Capital One Nessie** (sandbox bank data for Finance) | `NESSIE_API_KEY` set | local emulator with the same Nessie API shapes |
-| **Billing office** (dispute submission) | never (no public provider billing API) | simulated billing office: acknowledges, reviews, responds on a demo-paced timeline |
+| `sahaya` (the app) | `.` | https://sahaya-mu.vercel.app |
+| `sahaya-landing` (marketing site) | `landing/` | https://sahaya-landing-pink.vercel.app |
 
-### Accessible voice shopping (Visa "Reimagining shopping")
-
-Open **`/shop`** on a phone (or tap "Order my groceries" on Home, or "🛒 Groceries" in
-Care). Flow: Margaret says "I need my usual groceries" → Care reads her order history
-and preferences (usual items = bought in at least half of past orders) → product
-search (Apify `apify~e-commerce-scraping-tool` when live) → the **deterministic
-substitution policy** (`src/agents/care/shopping/substitution.ts`) picks her usual
-brand, a reasonable swap within 30% of her usual price that respects dietary rules
-(e.g. low-sodium) and dislikes (e.g. skim), or leaves the item off and says why →
-an accessible cart (large type, plain-language reasons, one clear total, read-aloud)
-→ she taps **Approve and pay $X** → sandbox checkout → live tracking timeline.
-
-Code-enforced safety: approval is bound to the cart's id, hash and total; checkout
-refuses a changed, superseded, already-ordered or over-limit cart; a spoken "yes"
-never approves. The demo **ends at a sandbox checkout**: no card number is stored and
-no money moves. Terminal walkthrough: `npm run demo:shopping`. Tests:
-`tests/shopping.test.ts`. Optional env: `APIFY_TOKEN`, `APIFY_ACTOR_ID`,
-`APIFY_MARKETPLACES`, `APIFY_TIMEOUT_MS`, `SHOP_TRACKING_STEP_MS`.
-| **Bright Data** (Care price verification) | `BRIGHTDATA_API_TOKEN`+`BRIGHTDATA_SERP_ZONE` set | labeled sample listings |
-
-### Shopping prices: discovery vs. verification
-
-Care's shopping flow splits two jobs so the two web-data providers never run the
-same search:
-
-1. **Discovery** finds the structured product Care would normally buy (today the
-   store catalog in `careTools.ts`; this is where Apify plugs in).
-2. **Verification** (Bright Data, `src/integrations/brightdata.ts`) takes that
-   product's name and asks the open market, Google Shopping via the SERP API, what
-   it costs right now across retailers. Only the product name leaves Sahaya.
-3. Sahaya validates every listing in code (`src/agents/care/priceCompare.ts`):
-   schema check, USD-only prices, http(s) links, markup stripped, and listings
-   carrying injected instructions dropped. Sizes are normalized (gal, half gal,
-   fl oz, lb, oz, ct, dozen) to a per-unit price, and listings far below the
-   median are flagged as suspicious.
-4. Care reports whether the usual price is verified, above, or below the market,
-   shows each listing's source and freshness (results older than 24h are stale
-   and can't be added), and recommends the best in-stock unit price.
-5. `addToDraftCart` adds the choice to a **draft** cart. Buying still goes
-   through `requestOrderApproval`.
-
-Demo: `npm run demo:prices` (or `npm run demo:prices -- eggs`), or ask Care
-"Is my usual milk a good price right now?".
-| **Gemini** (Care pantry-photo vision) | `GEMINI_API_KEY` set | fixed sample fridge detection (labeled sandbox) |
-
-### Gemini: nutrition and meal assistance (Care)
-
-Gemini has one distinct multimodal job: look at a fridge/pantry photo and propose
-ingredients. Claude still does the conversation; a deterministic planner does the meal
-planning. Open **Care → 🥕 Pantry** (`/care/pantry`):
-
-1. Margaret photographs her refrigerator or pantry (downscaled in the browser, never stored).
-2. Care sends it to Gemini (`GEMINI_MODEL`, default `gemini-3.8-flash`, via `generateContent`).
-3. `pantryPolicy.ts` validates the result in code: clear items are pre-confirmed, items
-   under 75% confidence are held back, and text read off notes/labels is rejected.
-4. Care asks Margaret to confirm the uncertain items (planning is refused until she does).
-5. `mealPlanner.ts` combines confirmed ingredients with her preferences (allergies and
-   vegetarian are hard filters; low sodium, soft foods, dislikes, prep time).
-6. Care proposes a recipe and drafts a grocery list of missing items. Ordering still goes
-   through the normal approval gate.
-
-Demo: `npm run demo:pantry` (sandbox), or `npm run demo:pantry -- fridge.jpg` with
-`GEMINI_API_KEY` set for a real vision call. Tests: `tests/pantryNutrition.test.ts`.
-| **Coinbase x402** (Care pays for product data, Base Sepolia test USDC only) | `X402_WALLET_PRIVATE_KEY`+`X402_PAY_TO` set | throwaway key + local signature verifier, nothing settles (`npm run demo:x402`) |
-| **Coinbase x402, Finance reports** (optional experiment: Finance buys benchmark reports, approval required for every purchase) | `FINANCE_X402_REPORTS=on` | off by default; when on, always sandbox, never a funded wallet (`npm run demo:x402-finance`) |
-
-### Finance spending review (Capital One Nessie)
-
-Open **`/money`** (or "Review my spending" on Home, or "🏦 Spending" in Finance), or
-just ask Finance "What subscriptions am I paying for?". Flow: Finance asks to read the
-checking account (an **approval card**, read-only) → on approval it sets up a Nessie
-customer + "Everyday Checking" account and posts ~3 months of test purchases →
-it reads purchases **only from the authorized account** → Claude categorizes them
-(labels validated in code; rules without a key) → code finds possible double charges,
-monthly subscriptions and price increases, and builds the monthly summary → suggested
-actions the person accepts or dismisses → everything saved in Finance's memory
-(Convex `memories` table when `NEXT_PUBLIC_CONVEX_URL` is set).
-
-Demo: in `/money` open "Demo: add a sandbox transaction" → **Post a double charge**
-(the bank re-posts the latest purchase) → **Review my spending again**: Finance lists
-it under "New since last review" flagged *possible duplicate* and suggests a dispute.
-
-Code-enforced: the account id never comes from model input; only the last 4 digits
-are stored; Finance has no tool that creates purchases (the demo poster is outside
-the agent); accepting a suggestion only drafts a dispute or adds a to-do, nothing is
-sent or cancelled. Terminal walkthrough: `npm run demo:nessie`. Tests:
-`tests/nessie.test.ts`. Optional env: `NESSIE_API_KEY`, `NESSIE_BASE_URL`
-(default `https://api.nessieisreal.com`).
-
-### Autonomous bill investigation (Hyphenate: autonomous systems for finance)
-
-Open **`/finance/case`** (or "🧾 Bill check" in Finance). Margaret uploads a hospital
-statement and her insurance EOB (or taps "Use Margaret's sample documents"; copies are
-in `public/samples/`). Finance then does the work on its own:
-
-1. **Extracts** both documents with a deterministic parser that keeps the exact source
-   line and the document's SHA-256 for every fact. Claude (when live) only reads layouts
-   the parser can't, and its output is accepted only if every amount, code and date
-   literally appears in the document.
-2. **Reconciles** them in pure code (`src/agents/finance/investigation/reconcile.ts`):
-   duplicate charges, charges never sent to insurance, billed-amount and payment
-   mismatches, and the bottom line, with written calculations and the checks that passed.
-   In the sample, CPT 80053 is billed twice, the EOB denied the second as a duplicate
-   (remark D17), and the $148.00 gap between the $212.00 bill and the $64.00 the EOB says
-   she owes is fully explained by it.
-3. **Claude compares the documents** as an advisor: its flags are kept only when the rules
-   engine corroborates them (shown as "Rules + Claude agree"); anything else is shown as
-   "not supported by the numbers" and never acted on. Its summary and letter are used only
-   if every dollar amount is one the case computed.
-4. **Builds a case** with evidence quotes, math, next steps and a dispute (or
-   clarification) letter addressed only to the billing contact in the provider's letterhead.
-5. **Margaret reviews**: she can take out a finding ("This isn't an error"), which
-   redrafts the letter and invalidates the old approval, then approves the exact letter
-   (approval is bound to case + draft fingerprint + recipient) or declines.
-6. **Submits** to the sandbox billing office and **tracks** acknowledgment, review and the
-   response, then **verifies** the corrected balance against the EOB (a partial fix is
-   flagged, not called resolved).
-
-Bounded autonomy and least privilege are enforced in code: `CASE_CAPABILITIES` in
-`caseService.ts` gives Finance no right to review findings, approve, close the case,
-change the recipient or move money, and Finance's tool registry has no such tools.
-A denied attempt is itself audited. Every step is appended to a **SHA-256 hash-chained
-case audit trail** (mirrored to the household audit log); "Download evidence packet"
-exports the documents, extraction, findings, letter, approvals and chain so a third
-party can re-verify it. Hyphenate does not provide a billing API; this is a
-challenge-aligned workflow. Terminal walkthrough: `npm run demo:finance-case`. Tests:
-`tests/financeInvestigation.test.ts`. Optional env: `FINANCE_CASE_STEP_MS`,
-`FINANCE_BILLING_SCENARIO=partial`.
-
-To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
-schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.
-
-## Acceptance criteria
-
-1. ✅ Four agent pages on mobile (`/agents/guardian|care|wellness|finance`).
-2. ✅ Each has a distinct functional conversation (own prompt + tools + planner).
-3. ✅ Own tools and persistent history (per-agent memory namespace + conversation store).
-4. ✅ Meaningful end-to-end workflow per agent (e.g. Care: prefs→cart→approval→order→Finance review).
-5. ✅ Tasks persist with real status and steps.
-6. ✅ Caregivers see authorized updates (Family dashboard, consent-gated).
-7. ✅ Cross-agent events with explicit permission checks (Activity audit trail).
-8. ✅ Voice and text both function (mic + typing; Cartesia or browser TTS).
-9. ✅ Sensitive actions require approval.
-10. ✅ Installable, responsive PWA (manifest + service worker + icons).
-11. ✅ Automated tests verify isolation and cross-agent permissions (`npm test`, 15 tests).
-12. ✅ Integrations identified as live/sandbox/unavailable.
-
-## Tests
-
-`tests/isolation.test.ts` — memory namespace isolation, shared-memory permissions,
-distinct tool registries. `tests/crossAgent.test.ts` — the event bus allow/block/reject
-rules, consent gating, payload narrowing (no whole-conversation transfer), inbox
-targeting. `tests/workflows.test.ts` — approval gating + the full Care→Finance and
-Wellness→Guardian flows.
-
-## Notes / honest limitations
-- Sandbox mode uses keyword planners, not an LLM; add `ANTHROPIC_API_KEY` for real
-  reasoning. The tool execution, memory, approvals and event bus are identical in both modes.
-- Scheduled jobs (`scheduleTask`) persist intent; wiring them to Convex cron is the
-  natural next step for live deployments.
-- Auth0 is declared and gated but not fully wired to a login flow (demo user by default).
+Both build from `main`. The deployed app runs in sandbox mode for any service whose env
+vars are not set in the Vercel project settings; secrets stay in `.env.local` locally and
+in the Vercel dashboard in production. The root `.vercelignore` excludes local env files,
+`services/`, tests and demo scripts, and applies to both projects, so do not add
+`landing/` to it. WebRTC call rooms are held in process memory, so for reliable two-person
+calls run the call demo on a single server instance.
