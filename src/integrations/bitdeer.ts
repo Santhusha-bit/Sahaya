@@ -163,7 +163,7 @@ export class SandboxWellnessInferenceAdapter implements WellnessInferenceProvide
 }
 
 /** Process-wide provider (swappable in tests/demos, like the incident index). */
-const GLOBAL_KEY = "__kinline_wellness_inference__";
+const GLOBAL_KEY = "__Sahaya_wellness_inference__";
 
 export function getWellnessInferenceProvider(): WellnessInferenceProvider {
   const g = globalThis as Record<string, unknown>;

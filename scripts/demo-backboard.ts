@@ -18,7 +18,7 @@ async function main() {
   const status = backboardStatus();
 
   line("═");
-  console.log(`KINLINE — Backboard historical context (mode: ${status.mode})`);
+  console.log(`Sahaya — Backboard historical context (mode: ${status.mode})`);
   console.log(status.detail);
   line("═");
 

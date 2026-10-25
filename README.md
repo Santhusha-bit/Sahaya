@@ -1,8 +1,8 @@
-# Kinline
+# Sahaya
 
 **Four independent AI agents in one installable care companion.**
 
-Kinline is a mobile-first PWA for older adults and their families. It is **not** one
+Sahaya is a mobile-first PWA for older adults and their families. It is **not** one
 chatbot with four prompts — it runs four separately instantiated agents, each with its
 own persona, tool registry, scoped memory, approval policy, workflows and event
 handlers. They share infrastructure but never each other's private data; they
@@ -10,10 +10,10 @@ collaborate only through a controlled, permission-checked event bus.
 
 | Agent | Does | Never does |
 |---|---|---|
-| **Guardian** 🛡️ | Scam analysis, verification, emergencies, trusted-contact alerts, human assistance | meds, money, check-ins |
-| **Care** ❤️ | Medications, grocery lists, carts, orders, meals, pantry | safety, money analysis, emotions |
-| **Wellness** ✨ | Daily check-ins, mood/sleep/social observations, longitudinal trends, family calls | medical advice, bills, safety response |
-| **Finance** 🧾 | Bill breakdowns, insurance/invoice audits, recurring charges, disputes, projections | meds, groceries, safety |
+| **Guardian**  | Scam analysis, verification, emergencies, trusted-contact alerts, human assistance | meds, money, check-ins |
+| **Care**  | Medications, grocery lists, carts, orders, meals, pantry | safety, money analysis, emotions |
+| **Wellness**  | Daily check-ins, mood/sleep/social observations, longitudinal trends, family calls | medical advice, bills, safety response |
+| **Finance**  | Bill breakdowns, insurance/invoice audits, recurring charges, disputes, projections | meds, groceries, safety |
 
 ## Quick start
 
@@ -24,7 +24,7 @@ npm run dev                  # http://localhost:3000
 npm test                     # isolation + cross-agent permission tests
 ```
 
-**No API keys required.** With keys absent, Kinline runs in **sandbox mode**: a
+**No API keys required.** With keys absent, Sahaya runs in **sandbox mode**: a
 deterministic per-agent planner drives the *same* real tools, approvals, memory and
 event bus — so every workflow is demonstrable offline. Add keys to go live.
 

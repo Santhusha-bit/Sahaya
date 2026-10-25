@@ -129,7 +129,7 @@ export class TigerDataTimeSeries implements TimeSeriesProvider {
   }
 }
 
-const GLOBAL_KEY = "__kinline_tigerdata__";
+const GLOBAL_KEY = "__Sahaya_tigerdata__";
 
 export function getTimeSeriesProvider(): TimeSeriesProvider {
   const g = globalThis as Record<string, unknown>;

@@ -34,7 +34,7 @@ async function main() {
   });
 
   line("═");
-  console.log(`KINLINE — Incident search demo (index: ${elasticStatus().mode})`);
+  console.log(`Sahaya — Incident search demo (index: ${elasticStatus().mode})`);
   console.log(`${elasticStatus().detail}`);
   console.log(`Indexed ${indexed} past incidents + today's screening.`);
   line("═");

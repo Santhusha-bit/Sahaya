@@ -14,7 +14,7 @@ export interface SahayaUser {
 export function getCurrentUser(): SahayaUser {
   const mode = auth0Status().mode === "live" ? "live" : "sandbox";
   return {
-    id: process.env.KINLINE_DEMO_USER_ID?.trim() || "demo-user",
+    id: process.env.Sahaya_DEMO_USER_ID?.trim() || "demo-user",
     name: "Eleanor",
     role: "elder",
     authMode: mode === "live" ? "live" : "sandbox",

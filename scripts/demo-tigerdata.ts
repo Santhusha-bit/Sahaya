@@ -21,7 +21,7 @@ async function main() {
   const base = 1_760_000_000_000; // fixed timestamp (scripts can't use Date.now via workflow)
 
   line("═");
-  console.log(`KINLINE — Tiger Data wellness time series (mode: ${status.mode})`);
+  console.log(`Sahaya — Tiger Data wellness time series (mode: ${status.mode})`);
   console.log(status.detail);
   line("═");
 

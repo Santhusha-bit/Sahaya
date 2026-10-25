@@ -22,7 +22,7 @@ async function main() {
   await wellness.initialize();
 
   line("═");
-  console.log("KINLINE — Wellness memory: review, correct, delete, dedup");
+  console.log("Sahaya — Wellness memory: review, correct, delete, dedup");
   line("═");
 
   // 1. Record two observations.

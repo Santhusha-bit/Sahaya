@@ -142,7 +142,7 @@ export class SnowflakeAnalytics implements AnalyticsProvider {
   }
 }
 
-const GLOBAL_KEY = "__kinline_snowflake__";
+const GLOBAL_KEY = "__Sahaya_snowflake__";
 
 export function getAnalyticsProvider(): AnalyticsProvider {
   const g = globalThis as Record<string, unknown>;

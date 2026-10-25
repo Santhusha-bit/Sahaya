@@ -1,4 +1,4 @@
-# Kinline — Guardian Safety Platform Progress
+# Sahaya — Guardian Safety Platform Progress
 
 Status of the five-track build (see MILESTONES.md for the plans). Run commands
 from the repo root.

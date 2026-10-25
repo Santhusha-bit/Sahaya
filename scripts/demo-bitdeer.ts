@@ -30,7 +30,7 @@ async function main() {
   const provider = getWellnessInferenceProvider();
 
   line("═");
-  console.log(`KINLINE — Bitdeer structured wellness extraction (mode: ${status.mode})`);
+  console.log(`Sahaya — Bitdeer structured wellness extraction (mode: ${status.mode})`);
   console.log(status.detail);
   console.log(`Provider: ${provider.name}  |  Model: ${provider.model}`);
   line("═");
