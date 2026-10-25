@@ -12,7 +12,6 @@
 
 import { id, now } from "@/lib/id";
 import { incidentSearchPermitted, indexIncident } from "./incidentIndexer";
-import { sendSms } from "@/integrations/twilio";
 import type { ToolContext } from "../base/types";
 import {
   canViewIncidents,
@@ -242,52 +241,20 @@ export async function runScamScreening(
     detail: { incidentId: incident.id, status: indexed.status, ...(indexed.error ? { error: indexed.error } : {}) },
   });
 
-  // Phone directory for outbound SMS: caregiver records carry role/permissions, so
-  // reuse the trusted-contact directory (same person, keyed by name) for numbers.
-  const phoneByName = new Map<string, string>();
-  if (caregiverAlerts.length) {
-    for (const tc of await ctx.memory.readShared("trustedContacts")) {
-      const name = String(tc.data.name ?? "").toLowerCase();
-      if (name && tc.data.phone) phoneByName.set(name, String(tc.data.phone));
-    }
-  }
-
   for (const alert of caregiverAlerts) {
-    // Deliver via Twilio SMS when we have a number and the caregiver's channel is
-    // sms/phone. Honest live/sandbox: sendSms() only reports "sms" on a real send.
-    const phone = phoneByName.get(alert.name.toLowerCase());
-    let deliveredChannel = alert.channel;
-    let smsDelivered = false;
-    let smsSid: string | undefined;
-    let smsError: string | undefined;
-    if (phone && (alert.channel === "sms" || alert.channel === "phone")) {
-      const sms = await sendSms({ to: phone, body: `Sahaya Guardian: ${alert.message}` });
-      smsDelivered = sms.backend === "twilio" && sms.sent;
-      smsSid = sms.sid;
-      smsError = sms.reason;
-      deliveredChannel = smsDelivered ? "sms" : "in_app";
-    } else if (alert.channel === "sms" || alert.channel === "phone") {
-      // No number on file: this routes to the in-app caregiver dashboard instead.
-      deliveredChannel = "in_app";
-    }
+    // Caregiver alerts are delivered in-app (the family dashboard); there is no
+    // SMS channel, so phone/sms preferences route to the in-app inbox too.
+    const deliveredChannel = alert.channel === "sms" || alert.channel === "phone" ? "in_app" : alert.channel;
     await ctx.memory.save(
       "notifications",
-      {
-        ...alert,
-        channel: deliveredChannel,
-        incidentId: incident.id,
-        smsAttempted: !!phone,
-        smsDelivered,
-        smsSid,
-        ...(smsError ? { smsError } : {}),
-      },
+      { ...alert, channel: deliveredChannel, incidentId: incident.id },
       { tags: ["caregiver_alert"] },
     );
     await ctx.audit.record({
       actor: "guardian",
       action: "caregiver.alert",
       correlationId: ctx.correlationId,
-      detail: { to: alert.name, channel: deliveredChannel, smsDelivered },
+      detail: { to: alert.name, channel: deliveredChannel },
     });
   }
 

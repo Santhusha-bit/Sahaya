@@ -4,7 +4,6 @@ import type { AgentId } from "../base/types";
 import { AGENT_CAPABILITIES } from "../base/workItemPolicy";
 import { getHouseholdCoordinator } from "@/integrations/jira";
 import { getIncidentIndex } from "@/integrations/search";
-import { sendSms, twilioSmsConfigured } from "@/integrations/twilio";
 import { detectSignals } from "./scamSignals";
 import { runScamScreening } from "./scamWorkflow";
 import { isoDate, sharedTactics, summarizeIncidentMatches } from "./incidentSummary";
@@ -220,55 +219,27 @@ export const guardianTools: AgentTool[] = [
       const match = contacts.find(
         (c) => String(c.data.name ?? "").toLowerCase() === input.contactName.toLowerCase(),
       );
-      const phone = match?.data.phone ? String(match.data.phone) : undefined;
-
-      // Deliver via Twilio SMS when the contact has a phone number. Honest
-      // live/sandbox: sendSms() only reports backend "twilio" with sent=true when a
-      // real Twilio send succeeded, otherwise "sandbox" (nothing left the device).
-      // We record whatever actually happened and never claim an SMS we didn't send.
-      let channel: "sms" | "in_app" = "in_app";
-      let delivered = true;
-      let smsError: string | undefined;
-      let smsSid: string | undefined;
-      if (phone) {
-        const sms = await sendSms({ to: phone, body: `Sahaya Guardian: ${input.message}` });
-        channel = sms.backend === "twilio" && sms.sent ? "sms" : "in_app";
-        delivered = sms.sent || channel === "in_app";
-        smsError = sms.reason;
-        smsSid = sms.sid;
-      }
-
+      // Delivered in-app (the contact's family dashboard inbox); nothing is texted.
       const rec = await ctx.memory.save("notifications", {
         contactName: input.contactName,
         message: input.message,
-        delivered,
-        channel,
-        smsAttempted: !!phone,
-        smsDelivered: channel === "sms",
-        smsSid,
-        ...(smsError ? { smsError } : {}),
+        delivered: true,
+        channel: "in_app",
       });
       await ctx.audit.record({
         actor: "guardian",
         action: "contact.notify",
         correlationId: ctx.correlationId,
-        detail: { to: input.contactName, channel, delivered, smsDelivered: channel === "sms" },
+        detail: { to: input.contactName, channel: "in_app" },
       });
 
-      const deliveryNote =
-        channel === "sms"
-          ? "I texted them."
-          : phone
-            ? twilioSmsConfigured()
-              ? "The text couldn't be sent just now, so I logged the alert in the app for them."
-              : "I logged the alert in the app for them (live SMS isn't configured, so nothing was texted)."
-            : "I logged the alert in the app for them.";
+      const deliveryNote = "I posted the alert to their Sahaya inbox.";
       return {
         ok: true,
         summary: match
           ? `Alerted ${input.contactName}. ${deliveryNote}`
           : `Sent to ${input.contactName} (not in trusted list yet — consider adding them). ${deliveryNote}`,
-        data: { notificationId: rec.id, channel, delivered, smsDelivered: channel === "sms" },
+        data: { notificationId: rec.id, channel: "in_app", delivered: true },
       };
     },
   },

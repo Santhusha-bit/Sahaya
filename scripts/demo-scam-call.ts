@@ -10,7 +10,6 @@
  *   5. Cartesia speaks Guardian's private warning. Both audio files are saved.
  *
  * Without CARTESIA_API_KEY the script text stands in for STT (clearly labelled).
- * Twilio is disabled for this run so caregiver alerts stay in-app.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -32,7 +31,6 @@ try {
 } catch {
   /* no .env.local -> runs in sandbox */
 }
-for (const key of Object.keys(process.env)) if (key.startsWith("TWILIO_")) delete process.env[key];
 
 const { cartesiaStatus, isClaudeLive } = await import("@/lib/env");
 const { synthesizeSpeech, transcribePcm } = await import("@/integrations/cartesia");

@@ -40,7 +40,7 @@ event bus — so every workflow is demonstrable offline. Add keys to go live.
   token from `/api/voice/stt-token`; the API key stays on the server.
 - **Headless:** `npm run demo:scam-call` runs the same loop in Node (Cartesia TTS ->
   Cartesia STT -> screening -> Guardian) and saves the caller and warning audio to
-  your temp folder. Twilio is disabled for the run, so alerts stay in-app.
+  your temp folder. Alerts stay in-app.
 
 ## Architecture
 

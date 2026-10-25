@@ -87,18 +87,6 @@ export function callScreeningStatus(): IntegrationStatus {
   };
 }
 
-export function twilioStatus(): IntegrationStatus {
-  const live = has("TWILIO_ACCOUNT_SID") && has("TWILIO_AUTH_TOKEN");
-  return {
-    key: "twilio",
-    label: "Twilio SMS (caregiver alerts)",
-    mode: live ? "live" : "sandbox",
-    detail: live
-      ? "Live: Guardian alerts and Care reminders are texted to trusted contacts."
-      : "Sandbox: no Twilio credentials; alerts are recorded in-app and nothing is texted.",
-  };
-}
-
 export function fetchaiStatus(): IntegrationStatus {
   const agents = ["wellness", "care", "finance"].filter(
     (a) => has(`FETCHAI_${a.toUpperCase()}_URL`) || (a === "wellness" && has("FETCHAI_BRIDGE_URL")),
@@ -353,7 +341,6 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     elasticStatus(),
     fetchaiStatus(),
     callScreeningStatus(),
-    twilioStatus(),
     armadinStatus(),
     mossStatus(),
     bitdeerStatus(),

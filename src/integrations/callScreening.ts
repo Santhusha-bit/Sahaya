@@ -1,5 +1,5 @@
 /**
- * Live scam-call screening for WebRTC calls (replaces the Twilio voice webhook).
+ * Live scam-call screening for WebRTC calls.
  *
  * The callee's browser sends the caller's rolling transcript (live captions that
  * arrive over the call's RTCDataChannel). Two detectors read it:

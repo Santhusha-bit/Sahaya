@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
-import { sendSms } from "@/integrations/twilio";
 import { requestCareAssistance } from "@/integrations/fetchai";
 import { createWorkItemStore } from "@/integrations/jira";
 import { getPublicListingProvider, type ListingFetch } from "@/integrations/brightdata";
@@ -19,21 +18,6 @@ import { comparePrices, freshnessOf, type CandidateProduct, type PriceComparison
 import { CATALOG } from "./catalog";
 import { pantryTools } from "./pantryTools";
 import { paidServiceTools } from "./paidServices/paidServiceTools";
-
-/**
- * Resolve the person's on-file contact number for outbound Twilio notifications.
- * Reads shared household preferences (Care holds shared:read/write). Returns null
- * when none is on file, so sendSms honestly falls back to a sandbox result.
- */
-async function recipientNumber(ctx: { memory: { readShared: (c: string, o?: { limit?: number }) => Promise<{ data: Record<string, unknown> }[]> } }): Promise<string | null> {
-  try {
-    const prefs = await ctx.memory.readShared("contact", { limit: 1 });
-    const phone = prefs[0]?.data?.phone;
-    return typeof phone === "string" && phone.trim() ? phone.trim() : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Structured product discovery: find the candidate product Care would normally buy.
@@ -72,30 +56,20 @@ export const careTools: AgentTool[] = [
   },
   {
     name: "sendMedicationReminder",
-    description: "Send a reminder for a medication dose (via Twilio SMS when configured, otherwise recorded for in-app delivery).",
+    description: "Send an in-app reminder for a medication dose.",
     inputSchema: z.object({ medicationName: z.string().min(1), time: z.string().optional() }),
     async execute(input, ctx) {
       const when = input.time ?? "now";
-      // Twilio outbound notify (honest live/sandbox: real SMS only with creds + an
-      // on-file number, otherwise a deterministic sandbox result).
-      const to = await recipientNumber(ctx);
-      const sms = await sendSms({
-        to,
-        body: `Reminder from Sahaya Care: time to take your ${input.medicationName}${when !== "now" ? ` (${when})` : ""}.`,
-      }).catch(() => null);
       const rec = await ctx.memory.save("reminders", {
         medicationName: input.medicationName,
         time: when,
         sent: true,
-        channel: sms?.backend === "twilio" && sms.sent ? "twilio_sms" : "in_app",
-        smsSid: sms?.sid ?? null,
-        smsSent: !!sms?.sent,
+        channel: "in_app",
       });
-      const via = sms?.backend === "twilio" && sms.sent ? " I texted it to your phone." : "";
       return {
         ok: true,
-        summary: `Reminder sent for ${input.medicationName}.${via}`,
-        data: { reminderId: rec.id, delivery: sms ? { backend: sms.backend, sent: sms.sent, reason: sms.reason } : null },
+        summary: `Reminder sent for ${input.medicationName}.`,
+        data: { reminderId: rec.id, delivery: { channel: "in_app" } },
       };
     },
   },
@@ -141,17 +115,10 @@ export const careTools: AgentTool[] = [
         status: "in_progress",
         correlationId: ctx.correlationId,
       });
-      // Twilio outbound notify: let the person know the refill is on its way.
-      const to = await recipientNumber(ctx);
-      const sms = await sendSms({
-        to,
-        body: `Sahaya Care: your refill for ${input.medicationName} is being prepared at ${input.pharmacy ?? "your pharmacy"}. We'll let you know when it's ready.`,
-      }).catch(() => null);
-      const via = sms?.backend === "twilio" && sms.sent ? " I texted you a confirmation." : "";
       return {
         ok: true,
-        summary: `Prepared a refill for ${input.medicationName}.${via}`,
-        data: { refillId: rec.id, delivery: sms ? { backend: sms.backend, sent: sms.sent, reason: sms.reason } : null },
+        summary: `Prepared a refill for ${input.medicationName}.`,
+        data: { refillId: rec.id },
       };
     },
   },
