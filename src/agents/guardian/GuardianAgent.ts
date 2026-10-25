@@ -21,6 +21,7 @@ export class GuardianAgent extends BaseAgent {
     ],
     theme: {
       accent: "#168b82",
+      accentInk: "#0f5f58",
       accentSoft: "#e5f4f0",
       gradient: "linear-gradient(135deg,#19a396,#168b82)",
       icon: "shield",

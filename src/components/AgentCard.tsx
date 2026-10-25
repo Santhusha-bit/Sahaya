@@ -9,11 +9,13 @@ export function AgentCard({ meta, compact = false }: { meta: AgentMeta; compact?
       href={`/agents/${meta.id}`}
       className="group card card-interactive fade-up relative flex items-center gap-4 overflow-hidden p-4"
     >
-      {/* Accent wash that intensifies on hover */}
+      {/* Accent wash that intensifies on hover. Anchored to the right edge and
+          faded out before the title column, so it never sits behind the text
+          and drops its contrast. */}
       <span
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-        style={{ background: `linear-gradient(90deg, ${meta.theme.accentSoft}55, transparent 55%)` }}
+        style={{ background: `linear-gradient(270deg, ${meta.theme.accentSoft}66, transparent 60%)` }}
       />
       <div
         className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-md transition-transform duration-200 group-hover:scale-[1.04]"
@@ -22,7 +24,7 @@ export function AgentCard({ meta, compact = false }: { meta: AgentMeta; compact?
         <Icon width={28} height={28} />
       </div>
       <div className="relative min-w-0 flex-1">
-        <div className="text-[17px] font-bold tracking-tight" style={{ color: meta.theme.accent }}>
+        <div className="text-[17px] font-bold tracking-tight" style={{ color: meta.theme.accentInk }}>
           {meta.displayName}
         </div>
         {!compact && <div className="text-[14px] leading-snug text-[var(--muted)]">{meta.tagline}</div>}

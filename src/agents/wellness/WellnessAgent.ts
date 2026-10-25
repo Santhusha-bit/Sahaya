@@ -19,6 +19,7 @@ export class WellnessAgent extends BaseAgent {
     ],
     theme: {
       accent: "#c98a2e",
+      accentInk: "#835815",
       accentSoft: "#fbf0dc",
       gradient: "linear-gradient(135deg,#b3761e,#c98a2e)",
       icon: "sparkles",

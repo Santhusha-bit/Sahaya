@@ -192,18 +192,18 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
         <div className="relative flex items-center gap-3">
           <Link
             href="/agents"
-            className="btn flex h-9 w-9 items-center justify-center rounded-full bg-white/20 backdrop-blur transition-colors hover:bg-white/30"
+            className="btn flex h-9 w-9 items-center justify-center rounded-full bg-white/25 ring-1 ring-inset ring-white/25 backdrop-blur transition-colors hover:bg-white/40"
             aria-label="Back"
           >
             <ChevronLeftIcon width={20} height={20} />
           </Link>
           <div className="flex items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/25 ring-1 ring-inset ring-white/25 backdrop-blur">
               <Icon width={22} height={22} />
             </span>
             <div className="leading-tight">
               <div className="text-[18px] font-extrabold tracking-tight">{meta.displayName}</div>
-              <div className="flex items-center gap-1.5 text-[12px] text-white/80">
+              <div className="flex items-center gap-1.5 text-[12px] text-white/90">
                 <span className="live-dot" style={{ background: "#fff" }} /> online
               </div>
             </div>
@@ -212,7 +212,7 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
             {meta.id === "wellness" && (
               <Link
                 href="/wellness"
-                className="btn rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/30"
+                className="btn rounded-full bg-white/25 ring-1 ring-inset ring-white/25 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/40"
                 aria-label="Open the Wellness dashboard"
               >
                 ✨ Dashboard
@@ -220,14 +220,14 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
             )}
             <button
               onClick={() => setVoiceEnabled((v) => !v)}
-              className="btn rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/30"
+              className="btn rounded-full bg-white/25 ring-1 ring-inset ring-white/25 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/40"
               aria-pressed={voiceEnabled}
             >
               {voiceEnabled ? "🔊 Voice on" : "🔈 Voice off"}
             </button>
           </div>
         </div>
-        <p className="relative mt-2.5 text-[13px] leading-snug text-white/85">{meta.tagline}</p>
+        <p className="relative mt-2.5 text-[13px] leading-snug text-white/90">{meta.tagline}</p>
       </header>
 
       {/* Status cards */}
@@ -252,7 +252,7 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
           ))}
           {activeTasks.map((t) => (
             <div key={t.id} className="card w-[246px] shrink-0 p-3.5">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: meta.theme.accent }}>
+              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: meta.theme.accentInk }}>
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: meta.theme.accent }} />
                 {t.status.replace("_", " ")}
               </div>
@@ -264,7 +264,7 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
                     className="pill px-2 py-0.5 text-[10px] font-semibold"
                     style={{
                       background: s.status === "done" ? meta.theme.accentSoft : "#f1f3f8",
-                      color: s.status === "done" ? meta.theme.accent : "#8a93a6",
+                      color: s.status === "done" ? meta.theme.accentInk : "#8a93a6",
                     }}
                   >
                     {s.status === "done" ? "✓ " : ""}{s.label}
@@ -275,7 +275,7 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
           ))}
           {inbox.map((e) => (
             <div key={e.id} className="card w-[246px] shrink-0 p-3.5" style={{ borderColor: meta.theme.accentSoft }}>
-              <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: meta.theme.accent }}>
+              <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: meta.theme.accentInk }}>
                 From {e.sourceAgent} · {e.status}
               </div>
               <div className="mt-1 text-[13px] leading-snug">{e.type}</div>

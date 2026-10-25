@@ -19,6 +19,7 @@ export class FinanceAgent extends BaseAgent {
     ],
     theme: {
       accent: "#5a6acf",
+      accentInk: "#3b449c",
       accentSoft: "#eceefb",
       gradient: "linear-gradient(135deg,#4a59bc,#5a6acf)",
       icon: "receipt",

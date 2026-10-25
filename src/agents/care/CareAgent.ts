@@ -19,6 +19,7 @@ export class CareAgent extends BaseAgent {
     ],
     theme: {
       accent: "#4779b8",
+      accentInk: "#2f5586",
       accentSoft: "#e8f0fa",
       gradient: "linear-gradient(135deg,#3a6aa6,#4779b8)",
       icon: "heart",

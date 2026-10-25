@@ -23,6 +23,8 @@ import { zodToJsonSchema } from "./zodToJsonSchema";
 
 export interface AgentTheme {
   accent: string;
+  /** Darker, high-contrast variant of `accent` for text on light surfaces. */
+  accentInk: string;
   accentSoft: string;
   gradient: string;
   icon: string;
