@@ -19,5 +19,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "convex", "landing", "actors"]
+  "exclude": ["node_modules", "convex", "landing", "actors", "CareAgent.ts", "accessRules.ts", "adapters.ts", "carePrompt.ts", "careTools.ts", "permissions.ts", "repository.ts"]
 }

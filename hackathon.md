@@ -25,7 +25,6 @@
 
 ## Log
 
-- 2026-10-24 `8491767`: project brief (`prompt.md`)
 - 2026-10-24 `ad4ce7d`: app scaffold with Convex schema, functions and data layer (`convex/*`, `src/agents/base/`)
 - 2026-10-24 `e708e3f`: Guardian scam workflow and policy engine (`scripts/demo-scam.ts`)
 - 2026-10-24 `b798857`: code-enforced execution gate (`src/agents/base/workItems.ts`)
