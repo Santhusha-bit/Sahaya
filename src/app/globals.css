@@ -1,36 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  /* Surfaces */
-  --bg: #f4f5fb;
-  --bg-tint: #eef0f9;
+  /* Surfaces — warm, human-centered (Sahaya design system) */
+  --bg: #fafaf7; /* warm off-white */
+  --bg-tint: #f3f4ef;
   --surface: #ffffff;
-  --surface-2: #fafbff;
+  --surface-2: #fbfbf8;
 
   /* Ink + text */
-  --ink: #141829;
-  --muted: #5d6478;
-  --faint: #8a90a6;
+  --ink: #172b3a; /* deep navy */
+  --muted: #65737e;
+  --faint: #9aa4ac;
 
   /* Lines */
-  --line: #e9ebf4;
-  --line-strong: #dcdfee;
+  --line: #e8e7e1;
+  --line-strong: #d9d8d0;
 
-  /* Brand */
-  --brand: #4f46e5;
-  --brand-ink: #3730a3;
-  --brand-soft: #e8e7fd;
-  --brand-grad: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%);
+  /* Brand — reassuring teal */
+  --brand: #168b82;
+  --brand-ink: #0f6a63;
+  --brand-soft: #e5f4f0;
+  --brand-grad: linear-gradient(135deg, #19a396 0%, #168b82 100%);
 
   /* Elevation */
-  --shadow-sm: 0 1px 2px rgba(20, 24, 41, 0.04), 0 1px 3px rgba(20, 24, 41, 0.06);
-  --shadow-md: 0 2px 8px rgba(20, 24, 41, 0.06), 0 8px 24px rgba(20, 24, 41, 0.07);
-  --shadow-lg: 0 8px 20px rgba(20, 24, 41, 0.08), 0 24px 48px rgba(20, 24, 41, 0.12);
-  --shadow-brand: 0 8px 24px rgba(79, 70, 229, 0.28);
+  --shadow-sm: 0 1px 2px rgba(23, 43, 58, 0.04), 0 2px 6px rgba(23, 43, 58, 0.05);
+  --shadow-md: 0 4px 12px rgba(23, 43, 58, 0.06), 0 12px 32px rgba(23, 43, 58, 0.07);
+  --shadow-lg: 0 10px 24px rgba(23, 43, 58, 0.08), 0 30px 60px rgba(23, 43, 58, 0.12);
+  --shadow-brand: 0 10px 30px rgba(22, 139, 130, 0.28);
 }
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 html,
@@ -58,10 +58,10 @@ body {
   position: relative;
   padding-bottom: 104px;
   background:
-    radial-gradient(120% 60% at 80% -10%, rgba(124, 58, 237, 0.1), transparent 60%),
-    radial-gradient(90% 50% at -10% 0%, rgba(99, 102, 241, 0.1), transparent 55%),
+    radial-gradient(120% 60% at 80% -10%, rgba(22, 139, 130, 0.1), transparent 60%),
+    radial-gradient(90% 50% at -10% 0%, rgba(71, 121, 184, 0.1), transparent 55%),
     var(--bg);
-  box-shadow: 0 0 80px rgba(20, 24, 41, 0.04);
+  box-shadow: 0 0 80px rgba(23, 43, 58, 0.04);
 }
 
 /* Cards: elevated, crisp, with a hairline border for definition. */
@@ -178,7 +178,7 @@ body {
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #eef0f7 25%, #f6f7fb 50%, #eef0f7 75%);
+  background: linear-gradient(90deg, #efeee8 25%, #f7f6f1 50%, #efeee8 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
   border-radius: 12px;

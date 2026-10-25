@@ -1,11 +1,17 @@
 import Link from "next/link";
-import { AgentCard } from "@/components/AgentCard";
 import { agentMeta, AGENT_IDS } from "@/agents/registry";
 import { getCurrentUser } from "@/lib/user";
 import { getDataLayer } from "@/agents/base/dataLayer";
-import { ActivityIcon, ChevronRightIcon, ShieldCheckIcon, UsersIcon } from "@/components/icons";
+import { AGENT_ICONS, MicIcon, ShieldCheckIcon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default function HomePage() {
   const meta = agentMeta();
@@ -24,7 +30,7 @@ export default function HomePage() {
           >
             <ShieldCheckIcon width={19} height={19} />
           </div>
-          <span className="text-[19px] font-extrabold tracking-tight">Kinline</span>
+          <span className="text-[19px] font-extrabold tracking-tight">Sahaya</span>
         </div>
         <Link
           href="/profile"
@@ -36,72 +42,74 @@ export default function HomePage() {
         </Link>
       </div>
 
-      {/* Hero */}
-      <header
-        className="fade-up relative mt-6 overflow-hidden rounded-[26px] p-6 text-white"
-        style={{ background: "var(--brand-grad)", boxShadow: "var(--shadow-lg)" }}
-      >
-        <div aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-white/15 blur-2xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-20 -left-8 h-44 w-44 rounded-full bg-black/10 blur-2xl" />
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-[12px] font-semibold backdrop-blur">
-            <span className="live-dot" /> All systems watching over you
-          </div>
-          <h1 className="mt-4 text-[30px] font-extrabold leading-tight tracking-tight">Hello, {firstName}.</h1>
-          <p className="mt-1.5 max-w-[32ch] text-[15px] leading-relaxed text-white/85">
-            Four caring helpers, each here for a different part of your day. Tap one to talk.
-          </p>
-        </div>
-      </header>
+      {/* Hero: greeting + voice-first mic */}
+      <section className="fade-up mt-8 text-center">
+        <p className="eyebrow text-[var(--brand-ink)]">Sahaya</p>
+        <h1 className="mt-2 text-[30px] font-extrabold leading-tight tracking-tight">
+          {greeting()}, {firstName}.
+        </h1>
+        <p className="mt-1.5 text-[16px] leading-relaxed text-[var(--muted)]">
+          How can I help you today?
+        </p>
 
-      {/* Agents */}
-      <section className="mt-7">
+        {/* Tap to speak */}
+        <div className="mt-8 flex flex-col items-center">
+          <Link
+            href="/agents/guardian"
+            aria-label="Tap to speak with Sahaya"
+            className="btn relative flex h-28 w-28 items-center justify-center"
+          >
+            <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-[var(--brand)]/15 [animation-duration:2.5s]" />
+            <span aria-hidden className="absolute inset-3 rounded-full bg-[var(--brand)]/10" />
+            <span
+              className="relative flex h-20 w-20 items-center justify-center rounded-full text-white"
+              style={{ background: "var(--brand-grad)", boxShadow: "var(--shadow-brand)" }}
+            >
+              <MicIcon width={32} height={32} />
+            </span>
+          </Link>
+          <p className="mt-3 text-[13px] font-medium text-[var(--muted)]">Tap to speak</p>
+        </div>
+      </section>
+
+      {/* Agent grid (2x2) */}
+      <section className="mt-9">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="eyebrow">Your companions</h2>
           <Link href="/agents" className="text-[13px] font-semibold text-[var(--brand)]">
             See all
           </Link>
         </div>
-        <div className="flex flex-col gap-3">
-          {AGENT_IDS.map((id, i) => (
-            <div key={id} className={`stagger-${Math.min(i + 1, 4)}`}>
-              <AgentCard meta={meta[id]} />
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Quick actions */}
-      <section className="mt-7">
-        <h2 className="eyebrow mb-3">Overview</h2>
         <div className="grid grid-cols-2 gap-3">
-          <Link href="/activity" className="card card-interactive fade-up flex flex-col gap-3 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
-              <ActivityIcon width={22} height={22} />
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-[15px] font-bold tracking-tight">
-                Activity <ChevronRightIcon width={15} height={15} className="text-[var(--faint)]" />
-              </div>
-              <div className="text-[13px] leading-snug text-[var(--muted)]">What the agents have done</div>
-            </div>
-          </Link>
-          <Link href="/family" className="card card-interactive fade-up flex flex-col gap-3 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <UsersIcon width={22} height={22} />
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-[15px] font-bold tracking-tight">
-                Family <ChevronRightIcon width={15} height={15} className="text-[var(--faint)]" />
-              </div>
-              <div className="text-[13px] leading-snug text-[var(--muted)]">Caregiver dashboard</div>
-            </div>
-          </Link>
+          {AGENT_IDS.map((id, i) => {
+            const m = meta[id];
+            const Icon = AGENT_ICONS[m.theme.icon] ?? AGENT_ICONS.shield;
+            return (
+              <Link
+                key={id}
+                href={`/agents/${id}`}
+                className={`card card-interactive fade-up stagger-${Math.min(i + 1, 4)} flex flex-col gap-3 p-4`}
+              >
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                  style={{ background: m.theme.accentSoft, color: m.theme.accent }}
+                >
+                  <Icon width={24} height={24} />
+                </span>
+                <div>
+                  <div className="text-[16px] font-bold tracking-tight" style={{ color: m.theme.accent }}>
+                    {m.displayName}
+                  </div>
+                  <div className="text-[12.5px] leading-snug text-[var(--muted)]">{m.tagline}</div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
-      <div className="mt-7 flex items-center justify-center gap-2 text-[12px] text-[var(--faint)]">
-        <span className="live-dot" style={{ background: backend === "convex" ? "#22c55e" : "#f59e0b" }} />
+      <div className="mt-8 flex items-center justify-center gap-2 text-[12px] text-[var(--faint)]">
+        <span className="live-dot" style={{ background: backend === "convex" ? "#22c55e" : "#e8b86d" }} />
         {backend === "convex" ? "Convex · live backend" : "Sandbox · in-process"} · agents run independently
       </div>
     </main>

@@ -170,7 +170,7 @@ export const careTools: AgentTool[] = [
         type: "payment.review",
         userId: ctx.userId,
         correlationId: ctx.correlationId,
-        payload: { orderId: order.id, amount: total, merchant: "Kinline Grocery", itemCount: lines.length },
+        payload: { orderId: order.id, amount: total, merchant: "Sahaya Grocery", itemCount: lines.length },
       });
       return {
         ok: true,

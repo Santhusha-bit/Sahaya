@@ -18,9 +18,9 @@ export class WellnessAgent extends BaseAgent {
       "I'd love to talk to my daughter this week",
     ],
     theme: {
-      accent: "#7c3aed",
-      accentSoft: "#ede9fe",
-      gradient: "linear-gradient(135deg,#5b21b6,#7c3aed)",
+      accent: "#c98a2e",
+      accentSoft: "#fbf0dc",
+      gradient: "linear-gradient(135deg,#b3761e,#c98a2e)",
       icon: "sparkles",
     },
   };

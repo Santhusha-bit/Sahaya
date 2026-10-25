@@ -43,8 +43,8 @@ interface Dashboard {
   backends: { timeseries: string; personalMemory: string };
 }
 
-const ACCENT = "#7c3aed";
-const ACCENT_SOFT = "#ede9fe";
+const ACCENT = "#c98a2e";
+const ACCENT_SOFT = "#fbf0dc";
 
 const MODE_STYLE: Record<string, { bg: string; color: string }> = {
   live: { bg: "#d1fae5", color: "#065f46" },
@@ -126,7 +126,7 @@ export default function WellnessDashboardPage() {
   return (
     <main className="px-4 pt-7 pb-4">
       {/* Header */}
-      <header className="relative overflow-hidden rounded-[24px] p-5 text-white" style={{ background: "linear-gradient(135deg,#5b21b6,#7c3aed)", boxShadow: "var(--shadow-lg)" }}>
+      <header className="relative overflow-hidden rounded-[24px] p-5 text-white" style={{ background: "linear-gradient(135deg,#b3761e,#c98a2e)", boxShadow: "var(--shadow-lg)" }}>
         <div aria-hidden className="pointer-events-none absolute -right-8 -top-12 h-36 w-36 rounded-full bg-white/15 blur-2xl" />
         <div className="relative flex items-center gap-3">
           <span aria-hidden className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-[22px] backdrop-blur">✨</span>

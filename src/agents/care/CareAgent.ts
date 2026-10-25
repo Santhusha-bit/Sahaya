@@ -18,10 +18,10 @@ export class CareAgent extends BaseAgent {
       "Suggest a few easy dinners",
     ],
     theme: {
-      accent: "#059669",
-      accentSoft: "#d1fae5",
-      gradient: "linear-gradient(135deg,#065f46,#059669)",
-      icon: "heart-pulse",
+      accent: "#4779b8",
+      accentSoft: "#e8f0fa",
+      gradient: "linear-gradient(135deg,#3a6aa6,#4779b8)",
+      icon: "heart",
     },
   };
 

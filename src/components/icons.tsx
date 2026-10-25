@@ -28,6 +28,13 @@ export function HeartPulseIcon(p: IconProps) {
     </svg>
   );
 }
+export function HeartIcon(p: IconProps) {
+  return (
+    <svg {...base(p)}>
+      <path d="M20.8 6.6a5.5 5.5 0 0 0-9-1.7l-.8.8-.8-.8a5.5 5.5 0 0 0-9 1.7c-1 2.6.2 5.3 2.2 7.3L12 21l6.6-6.1c2-2 3.2-4.7 2.2-7.3Z" />
+    </svg>
+  );
+}
 export function SparklesIcon(p: IconProps) {
   return (
     <svg {...base(p)}>
@@ -142,6 +149,7 @@ export function ShieldCheckIcon(p: IconProps) {
 
 export const AGENT_ICONS: Record<string, (p: IconProps) => React.JSX.Element> = {
   shield: ShieldIcon,
+  heart: HeartIcon,
   "heart-pulse": HeartPulseIcon,
   sparkles: SparklesIcon,
   receipt: ReceiptIcon,

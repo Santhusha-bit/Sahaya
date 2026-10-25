@@ -86,7 +86,7 @@ export class JiraWorkItemStore implements WorkItemStore {
         body: JSON.stringify({
           fields: {
             project: { key: this.cfg.projectKey },
-            summary: `[Kinline] ${item.requestedAction}`.slice(0, 250),
+            summary: `[Sahaya] ${item.requestedAction}`.slice(0, 250),
             description: adf(
               `Requesting agent: ${item.requestingAgent}\nAssigned agent: ${item.assignedAgent}\nScope: ${item.permissionScope}\nRequired reviewer role: ${item.requiredRole}\nInput hash: ${item.inputHash}`,
             ),

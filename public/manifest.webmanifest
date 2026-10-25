@@ -1,13 +1,13 @@
 {
-  "name": "Kinline",
-  "short_name": "Kinline",
-  "description": "Four caring AI agents — Guardian, Care, Wellness and Finance — in one companion app.",
+  "name": "Sahaya",
+  "short_name": "Sahaya",
+  "description": "Four caring AI agents (Guardian, Care, Wellness and Finance) in one voice-first companion app.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f6f7fb",
-  "theme_color": "#2563eb",
+  "background_color": "#fafaf7",
+  "theme_color": "#168b82",
   "icons": [
     { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/icons/maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" },

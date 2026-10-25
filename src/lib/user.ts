@@ -1,6 +1,6 @@
 import { auth0Status } from "./env";
 
-export interface KinlineUser {
+export interface SahayaUser {
   id: string;
   name: string;
   role: "elder" | "caregiver";
@@ -9,9 +9,9 @@ export interface KinlineUser {
 
 /**
  * Resolve the current user. Auth0 wiring is declared but, when unconfigured,
- * Kinline runs in single-user demo mode (honest "sandbox" auth).
+ * Sahaya runs in single-user demo mode (honest "sandbox" auth).
  */
-export function getCurrentUser(): KinlineUser {
+export function getCurrentUser(): SahayaUser {
   const mode = auth0Status().mode === "live" ? "live" : "sandbox";
   return {
     id: process.env.KINLINE_DEMO_USER_ID?.trim() || "demo-user",

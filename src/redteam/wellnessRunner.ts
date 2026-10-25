@@ -84,7 +84,7 @@ export async function runWellnessRedTeam(cases: WellnessAttackCase[] = WELLNESS_
 
 export function formatWellnessReport(report: WellnessRedTeamReport): string {
   const lines: string[] = [];
-  lines.push("# Kinline Wellness red-team report");
+  lines.push("# Sahaya Wellness red-team report");
   lines.push("");
   lines.push(`Cases: ${report.total}  |  Passed: ${report.passed}  |  Failed: ${report.failed}`);
   lines.push(

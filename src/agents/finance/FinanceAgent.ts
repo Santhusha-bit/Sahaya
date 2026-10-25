@@ -18,9 +18,9 @@ export class FinanceAgent extends BaseAgent {
       "What was my spending this month?",
     ],
     theme: {
-      accent: "#d97706",
-      accentSoft: "#fef3c7",
-      gradient: "linear-gradient(135deg,#92400e,#d97706)",
+      accent: "#5a6acf",
+      accentSoft: "#eceefb",
+      gradient: "linear-gradient(135deg,#4a59bc,#5a6acf)",
       icon: "receipt",
     },
   };
@@ -29,8 +29,8 @@ export class FinanceAgent extends BaseAgent {
 
   protected async seed(): Promise<void> {
     const txns = [
-      { merchant: "Kinline Grocery", amount: 42.3, date: "2026-10-01" },
-      { merchant: "Kinline Grocery", amount: 38.9, date: "2026-10-15" },
+      { merchant: "Sahaya Grocery", amount: 42.3, date: "2026-10-01" },
+      { merchant: "Sahaya Grocery", amount: 38.9, date: "2026-10-15" },
       { merchant: "StreamTV", amount: 15.99, date: "2026-10-03" },
       { merchant: "StreamTV", amount: 15.99, date: "2026-09-03" },
       { merchant: "Pharmacy", amount: 12.0, date: "2026-10-10" },

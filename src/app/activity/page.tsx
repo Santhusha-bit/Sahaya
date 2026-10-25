@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import type { AgentEvent } from "@/agents/base/types";
 
 const AGENT_COLOR: Record<string, string> = {
-  guardian: "#2563eb",
-  care: "#059669",
-  wellness: "#7c3aed",
-  finance: "#d97706",
+  guardian: "#168b82",
+  care: "#4779b8",
+  wellness: "#c98a2e",
+  finance: "#5a6acf",
 };
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {

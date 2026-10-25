@@ -12,10 +12,10 @@ interface FamilyFeed {
 }
 
 const SECTIONS: { id: AgentId; title: string; color: string; consentKey: string }[] = [
-  { id: "guardian", title: "Guardian alerts", color: "#2563eb", consentKey: "caregiverGuardian" },
-  { id: "care", title: "Care reminders & tasks", color: "#059669", consentKey: "caregiverCare" },
-  { id: "wellness", title: "Wellness summaries", color: "#7c3aed", consentKey: "caregiverWellness" },
-  { id: "finance", title: "Finance approvals", color: "#d97706", consentKey: "caregiverFinance" },
+  { id: "guardian", title: "Guardian alerts", color: "#168b82", consentKey: "caregiverGuardian" },
+  { id: "care", title: "Care reminders & tasks", color: "#4779b8", consentKey: "caregiverCare" },
+  { id: "wellness", title: "Wellness summaries", color: "#c98a2e", consentKey: "caregiverWellness" },
+  { id: "finance", title: "Finance approvals", color: "#5a6acf", consentKey: "caregiverFinance" },
 ];
 
 export default function FamilyPage() {

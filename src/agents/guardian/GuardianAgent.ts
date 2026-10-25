@@ -20,9 +20,9 @@ export class GuardianAgent extends BaseAgent {
       "Is this caller from my bank really my bank?",
     ],
     theme: {
-      accent: "#2563eb",
-      accentSoft: "#dbeafe",
-      gradient: "linear-gradient(135deg,#1e3a8a,#2563eb)",
+      accent: "#168b82",
+      accentSoft: "#e5f4f0",
+      gradient: "linear-gradient(135deg,#19a396,#168b82)",
       icon: "shield",
     },
   };

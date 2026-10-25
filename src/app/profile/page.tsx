@@ -73,16 +73,16 @@ export default function ProfilePage() {
       <div className="card mt-6 overflow-hidden p-5">
         <div className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[18px]">📲</span>
-          <div className="text-[15px] font-bold tracking-tight">Install Kinline</div>
+          <div className="text-[15px] font-bold tracking-tight">Install Sahaya</div>
         </div>
         <p className="mt-2 text-[13px] leading-relaxed text-[var(--muted)]">
-          This is an installable app. In your browser&apos;s menu, choose &ldquo;Add to Home Screen&rdquo; / &ldquo;Install Kinline&rdquo;
+          This is an installable app. In your browser&apos;s menu, choose &ldquo;Add to Home Screen&rdquo; / &ldquo;Install Sahaya&rdquo;
           to use it full-screen like a native app — it works offline for the shell.
         </p>
       </div>
 
       <p className="mt-6 text-center text-[12px] text-[var(--faint)]">
-        Kinline · four independent agents, one companion app.
+        Sahaya · four independent agents, one companion app.
       </p>
     </main>
   );
