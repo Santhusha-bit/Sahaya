@@ -24,6 +24,14 @@ import { runIncidentIndexJob } from "@/agents/guardian/incidentIndexer";
 import { NOT_SAME_CALLER } from "@/agents/guardian/incidentSummary";
 import { getIncidentIndex } from "@/integrations/search";
 
+/** True if `text` names the ISO date (YYYY-MM-DD) either as-is or spelled out ("October 4, 2026"). */
+function mentionsDate(text: string, iso: string): boolean {
+  if (text.includes(iso)) return true;
+  const d = new Date(`${iso}T12:00:00Z`);
+  const month = d.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+  return new RegExp(`${month}\\s+${d.getUTCDate()}(st|nd|rd|th)?,?\\s+${d.getUTCFullYear()}`).test(text);
+}
+
 function line(c = "─") {
   console.log(c.repeat(72));
 }
@@ -82,7 +90,7 @@ async function main() {
     ["today's incident did not match itself", !d.hits.some((h) => h.incidentId === todayId)],
     ["top match is the earlier fake-grandchild gift-card call", !!top && top.scamType === "fake_grandchild" && /gift card/i.test(top.snippet)],
     ["answer cites the top incident id", !!top && result.summary.includes(top.incidentId)],
-    ["answer includes the top incident date", !!top && result.summary.includes(top.date)],
+    ["answer includes the top incident date", !!top && mentionsDate(result.summary, top.date)],
     ["answer does not claim the same caller", result.summary.includes(NOT_SAME_CALLER)],
   ];
 
