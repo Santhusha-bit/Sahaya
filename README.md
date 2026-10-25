@@ -22,6 +22,13 @@ enforced in code, not in a prompt.
 | **Wellness** | Daily check-ins, mood/sleep/social observations, continuity, trends, family report | 
 | **Finance** | Spending review, credit and identity review, bill vs. insurance investigation, dispute drafts | 
 
+## How we use Convex
+
+Convex is the canonical store for agent memory, the agent-to-agent event bus, approvals, tasks and chat history.
+Schema and indexes live in `convex/schema.ts`, with queries and mutations in `convex/*.ts`.
+Agents reach Convex over HTTP through `src/agents/base/convexDataLayer.ts`, scoped per user and per agent.
+Full details and the build log: [hackathon.md](hackathon.md).
+
 ## Quick start
 
 ```bash
