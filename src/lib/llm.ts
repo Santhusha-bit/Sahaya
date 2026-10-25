@@ -95,6 +95,17 @@ export async function llmTurnStream(opts: {
   return toTurn(response);
 }
 
+/** One plain-text completion (no tools), for small summarization steps. */
+export async function llmText(opts: { system: string; prompt: string; maxTokens?: number }): Promise<string> {
+  const response = await getClient().messages.create({
+    model: AGENT_MODEL,
+    max_tokens: opts.maxTokens ?? 500,
+    system: opts.system,
+    messages: [{ role: "user", content: opts.prompt }],
+  });
+  return response.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+}
+
 function toTurn(response: Anthropic.Message): LlmTurn {
   let text = "";
   const toolUses: LlmToolUse[] = [];
