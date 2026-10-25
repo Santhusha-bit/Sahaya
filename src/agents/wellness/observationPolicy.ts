@@ -46,7 +46,7 @@ export interface PolicyResult {
 }
 
 /** Clinical diagnosis vocabulary Wellness must never assert as an observation. */
-const DIAGNOSIS_TERMS = [
+export const DIAGNOSIS_TERMS = [
   "diagnos", "disorder", "clinical depression", "major depression", "dementia",
   "alzheimer", "syndrome", "hypertension", "diabetes", "insomnia disorder",
   "sleep apnea", "bipolar", "psychosis", "patholog",
@@ -58,7 +58,7 @@ const DIAGNOSIS_TERMS = [
  * system or asks to move data. If a candidate's content reads like an
  * instruction, it is not an observation — reject it regardless of grounding.
  */
-const INJECTION_TERMS = [
+export const INJECTION_TERMS = [
   "ignore previous", "ignore all previous", "ignore the above", "disregard previous",
   "disregard all", "previous instructions", "new instructions", "system prompt",
   "you are now", "override", "developer mode",
@@ -69,7 +69,7 @@ const INJECTION_TERMS = [
 ];
 
 /** Medication-change vocabulary Wellness must never produce. */
-const MEDICATION_TERMS = [
+export const MEDICATION_TERMS = [
   "medication", "medicine", "dose", "dosage", "prescrib", "pill", "tablet",
   "mg ", "milligram", "stop taking", "increase your", "double your", "skip your",
 ];
