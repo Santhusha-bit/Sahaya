@@ -127,9 +127,11 @@ const bankTools: AgentTool[] = [
 import { CREDIT_REVIEW_PURPOSES } from "./credit/creditPolicy";
 import { REVIEW_COLLECTION, runCreditReview } from "./credit/creditReview";
 import { linkedPersonaId } from "./credit/testIdentities";
+import { investigationTools } from "./investigationTools";
 
 export const financeTools: AgentTool[] = [
   ...bankTools,
+  ...investigationTools,
   {
     name: "analyzeMedicalBill",
     description: "Break down a medical bill into line items, compute the total, and flag unusual or duplicate charges.",

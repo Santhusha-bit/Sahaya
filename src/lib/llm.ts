@@ -127,6 +127,30 @@ export async function llmStructured(opts: {
   return toTurn(response).toolUses.find((t) => t.name === opts.tool.name)?.input ?? null;
 }
 
+/**
+ * One Claude call that must answer with a single JSON object. Returns the parsed
+ * object, or null on any failure (refusal, truncation, non-JSON). Callers treat
+ * the result as untrusted and validate it in code before using any of it.
+ */
+export async function llmJson(opts: { system: string; prompt: string; maxTokens?: number }): Promise<unknown | null> {
+  try {
+    const response = await getClient().messages.create({
+      model: AGENT_MODEL,
+      max_tokens: opts.maxTokens ?? 4000,
+      system: opts.system,
+      messages: [{ role: "user", content: opts.prompt }],
+    });
+    if (response.stop_reason !== "end_turn") return null;
+    const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
 function toTurn(response: Anthropic.Message): LlmTurn {
   let text = "";
   const toolUses: LlmToolUse[] = [];

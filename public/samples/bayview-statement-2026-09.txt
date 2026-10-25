@@ -1,0 +1,26 @@
+BAYVIEW COMMUNITY HOSPITAL
+Patient Financial Services
+1200 Harbor Way, San Francisco, CA 94107
+Billing questions: billing@bayview-community.example | (555) 010-4400
+
+PATIENT STATEMENT
+Statement date: 09/30/2026
+Patient: Margaret Chen
+Account number: 0000-3318-4471
+Insurance: Golden State Health Plan
+Claim number: GSH-26-0814-55210
+
+DATE        CODE   DESCRIPTION                                    CHARGE
+08/14/2026  99214  Office/outpatient visit, established patient  $285.00
+08/14/2026  80053  Comprehensive metabolic panel                  $148.00
+08/14/2026  80053  Comprehensive metabolic panel                  $148.00
+08/14/2026  85025  Complete blood count with differential          $62.00
+08/14/2026  36415  Routine venipuncture                            $28.00
+08/14/2026  93000  Electrocardiogram, complete                    $175.00
+
+Total charges:                                                    $846.00
+Insurance payments (Golden State Health Plan, 09/12/2026):       -$256.00
+Insurance adjustments:                                           -$378.00
+AMOUNT YOU OWE:                                                   $212.00
+
+Payment due by 10/30/2026. Thank you for choosing Bayview.

@@ -13,6 +13,7 @@ export class FinanceAgent extends BaseAgent {
       "Hello, I'm Finance. I make confusing bills and statements clear, and I watch for overcharges. Want me to look at a bill or check your recurring charges?",
     systemPrompt: financePrompt,
     suggestedCommands: [
+      "Check my hospital bill against my insurance EOB",
       "Help me understand this hospital bill",
       "What subscriptions am I paying for?",
       "Is my care facility invoice correct?",
@@ -86,6 +87,15 @@ export class FinanceAgent extends BaseAgent {
     const m = message.toLowerCase();
     if (/disconnect|unlink|revoke/.test(m) && /bank|account|checking/.test(m)) {
       return { reply: "I'll stop reading that account.", toolCalls: [{ name: "disconnectBankAccount", input: {} }] };
+    }
+    if (/(dispute|billing office).*(status|hear|going|update)|where.*(dispute|case)|track.*(dispute|case)/.test(m)) {
+      return { reply: "Let me check on your billing dispute.", toolCalls: [{ name: "trackDisputeCase", input: {} }] };
+    }
+    if (/eob|explanation of benefits|against (my )?insurance|duplicate|charged twice|billed twice|investigat/.test(m)) {
+      return {
+        reply: "I'll compare the hospital statement with your insurance EOB line by line.",
+        toolCalls: [{ name: "openBillInvestigation", input: { useSampleDocuments: true } }],
+      };
     }
     if (/past credit reviews|credit review history|previous credit (check|review)s?/.test(m)) {
       return { reply: "Here are your past credit reviews and their audit trail.", toolCalls: [{ name: "listCreditReviews", input: {} }] };
