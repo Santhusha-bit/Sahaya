@@ -5,8 +5,10 @@ import { createFinanceAssistanceBridge, requestFinancialAssistance } from "@/int
 import { getDataLayer } from "../base/dataLayer";
 import { getCurrentUser } from "@/lib/user";
 import { auth0Status, jiraStatus } from "@/lib/env";
+import { investigationTools } from "./investigationTools";
 
 export const financeTools: AgentTool[] = [
+  ...investigationTools,
   {
     name: "analyzeMedicalBill",
     description: "Break down a medical bill into line items, compute the total, and flag unusual or duplicate charges.",

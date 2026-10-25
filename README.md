@@ -85,6 +85,7 @@ Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
 | **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
 | **Apify** (grocery product search) | `APIFY_TOKEN` set | sandbox store catalog (per item, labeled) |
 | **Checkout + tracking** | never (no commerce credentials) | sandbox checkout, Visa test-card reference, demo-paced tracking |
+| **Billing office** (dispute submission) | never (no public provider billing API) | simulated billing office: acknowledges, reviews, responds on a demo-paced timeline |
 
 ### Accessible voice shopping (Visa "Reimagining shopping")
 
@@ -104,6 +105,46 @@ never approves. The demo **ends at a sandbox checkout**: no card number is store
 no money moves. Terminal walkthrough: `npm run demo:shopping`. Tests:
 `tests/shopping.test.ts`. Optional env: `APIFY_TOKEN`, `APIFY_ACTOR_ID`,
 `APIFY_MARKETPLACES`, `APIFY_TIMEOUT_MS`, `SHOP_TRACKING_STEP_MS`.
+
+### Autonomous bill investigation (Hyphenate: autonomous systems for finance)
+
+Open **`/finance/case`** (or "🧾 Bill check" in Finance). Margaret uploads a hospital
+statement and her insurance EOB (or taps "Use Margaret's sample documents"; copies are
+in `public/samples/`). Finance then does the work on its own:
+
+1. **Extracts** both documents with a deterministic parser that keeps the exact source
+   line and the document's SHA-256 for every fact. Claude (when live) only reads layouts
+   the parser can't, and its output is accepted only if every amount, code and date
+   literally appears in the document.
+2. **Reconciles** them in pure code (`src/agents/finance/investigation/reconcile.ts`):
+   duplicate charges, charges never sent to insurance, billed-amount and payment
+   mismatches, and the bottom line, with written calculations and the checks that passed.
+   In the sample, CPT 80053 is billed twice, the EOB denied the second as a duplicate
+   (remark D17), and the $148.00 gap between the $212.00 bill and the $64.00 the EOB says
+   she owes is fully explained by it.
+3. **Claude compares the documents** as an advisor: its flags are kept only when the rules
+   engine corroborates them (shown as "Rules + Claude agree"); anything else is shown as
+   "not supported by the numbers" and never acted on. Its summary and letter are used only
+   if every dollar amount is one the case computed.
+4. **Builds a case** with evidence quotes, math, next steps and a dispute (or
+   clarification) letter addressed only to the billing contact in the provider's letterhead.
+5. **Margaret reviews**: she can take out a finding ("This isn't an error"), which
+   redrafts the letter and invalidates the old approval, then approves the exact letter
+   (approval is bound to case + draft fingerprint + recipient) or declines.
+6. **Submits** to the sandbox billing office and **tracks** acknowledgment, review and the
+   response, then **verifies** the corrected balance against the EOB (a partial fix is
+   flagged, not called resolved).
+
+Bounded autonomy and least privilege are enforced in code: `CASE_CAPABILITIES` in
+`caseService.ts` gives Finance no right to review findings, approve, close the case,
+change the recipient or move money, and Finance's tool registry has no such tools.
+A denied attempt is itself audited. Every step is appended to a **SHA-256 hash-chained
+case audit trail** (mirrored to the household audit log); "Download evidence packet"
+exports the documents, extraction, findings, letter, approvals and chain so a third
+party can re-verify it. Hyphenate does not provide a billing API; this is a
+challenge-aligned workflow. Terminal walkthrough: `npm run demo:finance-case`. Tests:
+`tests/financeInvestigation.test.ts`. Optional env: `FINANCE_CASE_STEP_MS`,
+`FINANCE_BILLING_SCENARIO=partial`.
 
 To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
 schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.

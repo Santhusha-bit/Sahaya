@@ -210,6 +210,16 @@ export function checkoutStatus(): IntegrationStatus {
   };
 }
 
+export function disputeChannelStatus(): IntegrationStatus {
+  return {
+    key: "dispute-channel",
+    label: "Billing office (dispute submission)",
+    mode: "sandbox",
+    detail:
+      "Sandbox: hospitals expose no public billing-dispute API, so approved letters go to a simulated billing office that acknowledges, reviews and responds on a demo-paced timeline. Nothing is sent outside the app.",
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -228,6 +238,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     snowflakeStatus(),
     apifyStatus(),
     checkoutStatus(),
+    disputeChannelStatus(),
   ];
 }
 

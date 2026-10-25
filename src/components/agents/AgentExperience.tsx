@@ -227,6 +227,15 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
                 🛒 Groceries
               </Link>
             )}
+            {meta.id === "finance" && (
+              <Link
+                href="/finance/case"
+                className="btn rounded-full bg-white/25 ring-1 ring-inset ring-white/25 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/40"
+                aria-label="Check a bill against your insurance EOB"
+              >
+                🧾 Bill check
+              </Link>
+            )}
             <button
               onClick={() => setVoiceEnabled((v) => !v)}
               className="btn rounded-full bg-white/25 ring-1 ring-inset ring-white/25 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/40"

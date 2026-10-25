@@ -66,7 +66,7 @@ export function hashInput(input: unknown): string {
   return createHash("sha256").update(canonicalize(input)).digest("hex").slice(0, 32);
 }
 
-function canonicalize(value: unknown): string {
+export function canonicalize(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
   const obj = value as Record<string, unknown>;

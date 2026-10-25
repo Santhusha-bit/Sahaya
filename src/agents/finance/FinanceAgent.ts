@@ -12,6 +12,7 @@ export class FinanceAgent extends BaseAgent {
       "Hello, I'm Finance. I make confusing bills and statements clear, and I watch for overcharges. Want me to look at a bill or check your recurring charges?",
     systemPrompt: financePrompt,
     suggestedCommands: [
+      "Check my hospital bill against my insurance EOB",
       "Help me understand this hospital bill",
       "What subscriptions am I paying for?",
       "Is my care facility invoice correct?",
@@ -65,6 +66,15 @@ export class FinanceAgent extends BaseAgent {
 
   protected async sandboxPlan(message: string, _ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
+    if (/(dispute|billing office).*(status|hear|going|update)|where.*(dispute|case)|track.*(dispute|case)/.test(m)) {
+      return { reply: "Let me check on your billing dispute.", toolCalls: [{ name: "trackDisputeCase", input: {} }] };
+    }
+    if (/eob|explanation of benefits|against (my )?insurance|duplicate|charged twice|billed twice|investigat/.test(m)) {
+      return {
+        reply: "I'll compare the hospital statement with your insurance EOB line by line.",
+        toolCalls: [{ name: "openBillInvestigation", input: { useSampleDocuments: true } }],
+      };
+    }
     if (/subscription|recurring|auto.?pay|paying for/.test(m)) {
       return { reply: "Let me scan your charges for recurring payments.", toolCalls: [{ name: "detectRecurringCharges", input: {} }] };
     }
