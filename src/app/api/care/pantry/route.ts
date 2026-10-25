@@ -25,13 +25,13 @@ async function snapshot(service: AgentService) {
 }
 
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   return NextResponse.json(await snapshot(service));
 }
 
 export async function POST(req: Request) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   const contentType = req.headers.get("content-type") ?? "";
 

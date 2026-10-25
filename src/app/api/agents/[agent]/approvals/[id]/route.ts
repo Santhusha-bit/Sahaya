@@ -18,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ agent: 
   }
   const decision = body.decision === "reject" ? "reject" : "approve";
 
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   const result = await service.decideApproval(agent, id, decision);
   if (!result.approval) return NextResponse.json({ error: "Approval not found or already decided" }, { status: 404 });

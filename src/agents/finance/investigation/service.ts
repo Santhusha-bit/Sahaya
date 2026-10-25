@@ -74,7 +74,7 @@ function toInvestigation(rec: MemoryRecord): Investigation {
 export async function ensureDemoDocuments(memory: ScopedMemory): Promise<void> {
   const existing = await memory.list("documents", { tag: "bill-investigation" });
   if (existing.length) return;
-  for (const doc of sampleErBillDocuments(getCurrentUser().name)) {
+  for (const doc of sampleErBillDocuments((await getCurrentUser()).name)) {
     await memory.save(
       "documents",
       { document: doc, authorized: true, authorizedFor: "bill_investigation", authorizedAt: now() },

@@ -12,7 +12,7 @@ export const maxDuration = 180;
 
 /** The person's usual list plus the honest Apify integration status. */
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   await service.initializeAll();
   const prefs = await getDataLayer().memory.list({ namespace: "shared", userId: user.id, collection: "groceryPreferences", limit: 1 });
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const items = Array.isArray(body.items) ? body.items.filter((i): i is string => typeof i === "string" && !!i.trim()) : undefined;
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
 
   if (body.action === "discover") {

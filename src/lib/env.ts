@@ -63,15 +63,23 @@ export function cartesiaStatus(): IntegrationStatus {
   };
 }
 
+/**
+ * Auth0 is live only when every value the SDK needs to run the login flow is set.
+ * APP_BASE_URL is optional: the SDK falls back to the request host.
+ */
+export function isAuth0Configured(): boolean {
+  return has("AUTH0_DOMAIN") && has("AUTH0_CLIENT_ID") && has("AUTH0_CLIENT_SECRET") && has("AUTH0_SECRET");
+}
+
 export function auth0Status(): IntegrationStatus {
-  const live = has("AUTH0_DOMAIN") && has("AUTH0_CLIENT_ID");
+  const live = isAuth0Configured();
   return {
     key: "auth0",
     label: "Auth0 (authentication)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — Auth0 session."
-      : "Sandbox — single demo user (no sign-in required).",
+      ? "Live: sign-in required; every page and API call runs as the signed-in Auth0 user (/auth/login, /auth/logout)."
+      : "Sandbox: single demo user (no sign-in required). Set AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET and AUTH0_SECRET to require sign-in.",
   };
 }
 

@@ -12,9 +12,9 @@ function greeting(): string {
   return "Good evening";
 }
 
-export default function HomePage() {
+export default async function HomePage() {
   const meta = agentMeta();
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const firstName = user.name.split(" ")[0];
 
   return (

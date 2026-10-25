@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * the agent's real tools, so consent checks and audit apply.
  */
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   const { record } = await service.runTool("wellness", "openWellnessSession", {});
   return NextResponse.json({ ok: record.status === "success", ...((record.output as object | undefined) ?? {}) });
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   }
   if (body.action !== "end") return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   const { record } = await service.runTool("wellness", "endWellnessSession", body.sessionId ? { sessionId: body.sessionId } : {});
   return NextResponse.json({ ok: record.status === "success", summary: record.summary });

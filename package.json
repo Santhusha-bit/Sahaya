@@ -45,14 +45,15 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
+    "@auth0/nextjs-auth0": "^4.33.0",
     "@factory/droid-sdk": "^0.10.0",
     "@types/pg": "^8.23.1",
     "convex": "^1.17.4",
     "droid": "^0.249.0",
     "next": "^15.5.28",
     "pg": "^8.23.1",
-    "react": "19.1.1",
-    "react-dom": "19.1.1",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
     "viem": "^2.57.11",
     "zod": "^3.24.1"
   },

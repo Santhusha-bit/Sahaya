@@ -584,7 +584,7 @@ export const wellnessTools: AgentTool[] = [
       "Confirm who Wellness is speaking with and under what authentication. The agent runs with the authenticated userId provided by the runtime; this reports that identity and whether it came from a live Auth0 session or the sandbox demo user, so sensitive actions are honestly attributed to the right person. Makes no direct Auth0 calls.",
     inputSchema: z.object({}),
     async execute(_input, ctx) {
-      const user = getCurrentUser();
+      const user = await getCurrentUser();
       const auth = auth0Status();
       await ctx.audit?.record({
         actor: "wellness",

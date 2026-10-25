@@ -1,6 +1,6 @@
 // Sahaya service worker — network-first app shell with offline fallback.
 // Bump CACHE whenever the shell/UI changes so old caches are purged on activate.
-const CACHE = "Sahaya-v3";
+const CACHE = "Sahaya-v4";
 const SHELL = ["/", "/agents", "/activity", "/family", "/profile", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -24,6 +24,8 @@ self.addEventListener("fetch", (event) => {
 
   // Never touch API calls or Next.js dev/HMR traffic — agents and live reload must be fresh.
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/webpack-hmr")) return;
+  // Never cache the Auth0 login/callback/logout redirects.
+  if (url.pathname.startsWith("/auth/")) return;
 
   // Network-first for everything else: the latest deploy always wins; cache is only
   // a fallback when the network is unavailable (true offline support).

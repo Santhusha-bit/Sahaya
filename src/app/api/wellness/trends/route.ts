@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   const granularity: Granularity = url.searchParams.get("granularity") === "monthly" ? "monthly" : "weekly";
   const audience: Audience = url.searchParams.get("audience") === "family" ? "family" : "self";
 
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const data = getDataLayer();
   const consent = await getConsent(data, user.id);
   const integration = tigerDataStatus();
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
 
   if (body.action === "seedDemo") {
     const data = getDataLayer();

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 /** Work items for the household, with the gate's current verdict on each. */
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const { service, backend } = getHouseholdCoordinator(user.id);
   const items = await service.list(user.id);
   return NextResponse.json({
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const coord = getHouseholdCoordinator(user.id);
   const agents = await AgentService.forUser(user.id);
 
