@@ -154,6 +154,8 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   wellnessConversationMemory: true,
   /** Contribute authorized, de-identified aggregates to household analytics (Snowflake). */
   wellnessHouseholdAnalytics: true,
+  /** Mirror approved numeric observations (sleep hours, energy rating) to Tiger Data for trends. Off = purge the mirror. */
+  wellnessTimeSeriesSync: true,
   /** Caregivers may view RAW wellness conversations (off by default — aggregates only). */
   caregiverWellnessRaw: false,
 };

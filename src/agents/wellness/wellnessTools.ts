@@ -14,6 +14,8 @@ import {
   recallConversationContext,
 } from "./conversationContext";
 import { getTimeSeriesProvider } from "@/integrations/tigerdata";
+import { getLongitudinalTrend } from "./longitudinalTrends";
+import { syncWellnessTimeSeries } from "./timeSeriesSync";
 import { updateHouseholdAnalytics } from "./householdAnalytics";
 import { getVoiceProvider } from "@/integrations/cartesia";
 import { getCurrentUser } from "@/lib/user";
@@ -317,6 +319,9 @@ export const wellnessTools: AgentTool[] = [
           contextSaved: result.contextSaved,
           sleepTrend: result.sleepTrend,
           energyTrend: result.energyTrend,
+          sleepVsUsual: result.sleepHistory
+            ? { narrative: result.sleepHistory.narrative, comparison: result.sleepHistory.comparison, confidence: result.sleepHistory.uncertainty.confidence }
+            : null,
           syncs: result.syncs,
           followUp: result.followUp,
         },
@@ -370,7 +375,9 @@ export const wellnessTools: AgentTool[] = [
       if (!updated) return { ok: false, summary: "I couldn't find that to correct.", error: "not_found" };
       // Rebuild continuity cues so Moss never keeps the stale version.
       await syncContinuity({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), audit: ctx.audit, correlationId: ctx.correlationId });
-      return { ok: true, summary: "Thank you — I've corrected that.", data: { recordId: updated.recordId, version: updated.version } };
+      // Propagate the correction to the Tiger Data mirror (non-fatal if it fails).
+      const sync = await syncWellnessTimeSeries({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), audit: ctx.audit, correlationId: ctx.correlationId });
+      return { ok: true, summary: "Thank you — I've corrected that.", data: { recordId: updated.recordId, version: updated.version, timeSeriesSync: sync.status } };
     },
   },
   {
@@ -381,8 +388,12 @@ export const wellnessTools: AgentTool[] = [
       const ok = await deleteObservation(ctx.memory, input.recordId, { audit: ctx.audit, correlationId: ctx.correlationId });
       // Continuity cues derived from it are rebuilt (and removed from Moss if nothing remains).
       if (ok) await syncContinuity({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), audit: ctx.audit, correlationId: ctx.correlationId });
+      // Remove it from the Tiger Data mirror too, so it leaves every trend.
+      const sync = ok
+        ? await syncWellnessTimeSeries({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), audit: ctx.audit, correlationId: ctx.correlationId })
+        : null;
       return ok
-        ? { ok: true, summary: "I've forgotten that, as you asked.", data: { recordId: input.recordId } }
+        ? { ok: true, summary: "I've forgotten that, as you asked.", data: { recordId: input.recordId, timeSeriesSync: sync?.status } }
         : { ok: false, summary: "I couldn't find that to forget.", error: "not_found" };
     },
   },
@@ -486,21 +497,25 @@ export const wellnessTools: AgentTool[] = [
   },
   {
     name: "getWellnessTrends",
-    description: "Get the longitudinal sleep and energy trends from the time series (Tiger Data), computed from the canonical active observations.",
-    inputSchema: z.object({}),
-    async execute(_input, ctx) {
-      // Ensure the series reflects current canonical data before reading trends.
+    description:
+      "Get weekly or monthly sleep and energy trends from the time series (Tiger Data), comparing the current period with the person's own history. Returns averages with observation counts, the evidence behind them, and explicit uncertainty. Descriptive only, never a medical judgement.",
+    inputSchema: z.object({ granularity: z.enum(["weekly", "monthly"]).default("weekly") }),
+    async execute(input, ctx) {
+      // Run the sync job first so the mirror reflects the current canonical record.
       const consent = await readConsent(ctx);
-      await runWellnessTurn({ text: "", memory: ctx.memory, userId: ctx.userId, consent, audit: ctx.audit, correlationId: ctx.correlationId }).catch(() => {});
-      const ts = getTimeSeriesProvider();
-      const [sleep, energy] = await Promise.all([
-        ts.trend({ userId: ctx.userId, metric: "sleep" }),
-        ts.trend({ userId: ctx.userId, metric: "energy" }),
-      ]);
+      const sync = await syncWellnessTimeSeries({ memory: ctx.memory, userId: ctx.userId, consent, audit: ctx.audit, correlationId: ctx.correlationId });
+      if (sync.status === "purged_no_consent") {
+        return { ok: true, summary: "Trend tracking is turned off in your privacy settings, so I'm not keeping a time series.", data: { sync } };
+      }
+      const [sleep, energy] = await Promise.all(
+        (["sleep", "energy"] as const).map((metric) =>
+          getLongitudinalTrend({ memory: ctx.memory, userId: ctx.userId, metric, granularity: input.granularity, consent }),
+        ),
+      );
       return {
         ok: true,
-        summary: `Sleep: ${sleep.count} night(s), ${sleep.direction}${sleep.average !== null ? `, avg ${sleep.average}h` : ""}. Energy: ${energy.direction}.`,
-        data: { sleep, energy, backend: ts.backend },
+        summary: `${sleep.narrative} (confidence: ${sleep.uncertainty.confidence})`,
+        data: { sleep, energy, sync, backend: getTimeSeriesProvider().backend },
       };
     },
   },

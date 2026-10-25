@@ -235,11 +235,14 @@ function decideOne(candidate: CandidateObservation, source: string): CandidateDe
         evidence: "",
       };
     }
-    const numNeedles = [String(candidate.value), numberWord(candidate.value) ?? "", candidate.unit, "slept", "sleep"].filter(Boolean) as string[];
+    // Prefer the sentence that states the number itself; "sleep"/"slept" alone
+    // would pick an earlier sentence like "I haven't been sleeping well."
+    const valueNeedles = [String(candidate.value), numberWord(candidate.value) ?? ""].filter(Boolean);
+    const byValue = source.split(/(?<=[.!?])\s+|\n+/).find((s) => valueNeedles.some((n) => new RegExp(`\\b${n.replace(".", "\\.")}\\b`, "i").test(s)));
     return {
       candidate, verdict: candidate.requires_confirmation ? "needs_confirmation" : "accepted",
       layer: "ok", reason: "Grounded numeric observation.",
-      evidence: supportingSentence(source, numNeedles),
+      evidence: byValue ? byValue.trim().slice(0, 200) : supportingSentence(source, [candidate.unit, "slept", "sleep"]),
     };
   }
 

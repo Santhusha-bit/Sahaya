@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AgentEvent, AgentId, AgentTask, Approval } from "@/agents/base/types";
+import { WellnessTrendsCard } from "@/components/WellnessTrendsCard";
 
 type PerAgent = Record<AgentId, { tasks: AgentTask[]; approvals: Approval[] }>;
 
@@ -135,6 +136,16 @@ export default function FamilyPage() {
           );
         })}
       </section>
+
+      {(filter === "all" || filter === "wellness") && feed.consent.caregiverWellness && (
+        <section className="mt-6">
+          <h2 className="eyebrow">Wellness trends</h2>
+          <p className="mt-1 text-[13px] text-[var(--muted)]">
+            Weekly sleep and energy from Eleanor&apos;s own reports, compared with her usual. Numbers only; conversations stay private.
+          </p>
+          <WellnessTrendsCard audience="family" refreshToken={String(feed.consent.caregiverWellnessRaw)} />
+        </section>
+      )}
 
       <p className="mt-6 text-center text-[12px] text-[var(--faint)]">
         Caregiver access respects the older adult&apos;s consent (prompt §8).

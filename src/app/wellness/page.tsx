@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { IntegrationStatus } from "@/lib/env";
 import { BrandLogo } from "@/components/BrandLogo";
+import { WellnessTrendsCard } from "@/components/WellnessTrendsCard";
 
 /** ---- Types mirrored from the dashboard API ---- */
 interface Observation {
@@ -76,31 +77,11 @@ const TYPE_LABEL: Record<string, string> = {
   mood: "Mood", appetite: "Appetite", pain: "Pain", social: "Social", activity: "Activity", other: "Note",
 };
 
-const DIRECTION_LABEL: Record<string, string> = {
-  improving: "↑ improving", declining: "↓ getting harder", stable: "→ steady", insufficient_data: "not enough data yet",
-};
-
 function fmtDate(ts: number): string {
   try { return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return ""; }
 }
 function fmtTime(ts: number): string {
   try { return new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; }
-}
-
-/** A gentle inline sparkline for a trend. */
-function Sparkline({ points }: { points: { value: number }[] }) {
-  if (points.length < 2) return null;
-  const vals = points.map((p) => p.value);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const span = max - min || 1;
-  const w = 120, h = 36;
-  const step = w / (vals.length - 1);
-  const d = vals.map((v, i) => `${i === 0 ? "M" : "L"} ${(i * step).toFixed(1)} ${(h - ((v - min) / span) * h).toFixed(1)}`).join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden className="shrink-0">
-      <path d={d} fill="none" stroke={ACCENT} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }
 
 export default function WellnessDashboardPage() {
@@ -153,6 +134,7 @@ export default function WellnessDashboardPage() {
     { key: "wellnessExternalProcessing", label: "External AI extraction", help: "Allow minimized text to be processed by the Bitdeer model. Off = on-device only." },
     { key: "wellnessMemory", label: "Personal & historical memory", help: "Let Wellness remember continuity and recall past conversations (Moss / Backboard)." },
     { key: "wellnessConversationMemory", label: "Remember our conversations", help: "Let Wellness remember hobbies and family visits you mention, so it can ask about them later (Backboard). Off = nothing new is saved and nothing is recalled." },
+    { key: "wellnessTimeSeriesSync", label: "Sleep & energy trends", help: "Mirror only the numbers (sleep hours, energy rating) to Tiger Data for weekly trends. Off = the mirror is deleted; your saved notes stay." },
     { key: "wellnessHouseholdAnalytics", label: "Household analytics", help: "Share de-identified aggregates (averages, counts) with authorized family. Never raw conversations." },
     { key: "caregiverWellnessRaw", label: "Caregivers see raw conversations", help: "Off by default. When off, family see only aggregates and authorized updates." },
   ];
@@ -217,20 +199,11 @@ export default function WellnessDashboardPage() {
 
       {/* Trends */}
       <h2 className="eyebrow mt-7">Sleep &amp; energy trends</h2>
-      <div className="mt-2 grid grid-cols-1 gap-2.5">
-        {[data.sleepTrend, data.energyTrend].map((t) => (
-          <div key={t.metric} className="card flex items-center justify-between gap-3 p-4">
-            <div>
-              <div className="text-[15px] font-bold capitalize">{t.metric}</div>
-              <div className="text-[13px] text-[var(--muted)]">
-                {t.count} reading(s) · {DIRECTION_LABEL[t.direction] ?? t.direction}
-                {t.metric === "sleep" && t.average !== null ? ` · avg ${t.average}h` : ""}
-              </div>
-            </div>
-            <Sparkline points={t.points} />
-          </div>
-        ))}
-      </div>
+      <WellnessTrendsCard
+        audience="self"
+        onChange={load}
+        refreshToken={`${data.consent.wellnessTimeSeriesSync}|${data.observations.map((o) => `${o.recordId}:${o.value ?? ""}`).join(",")}`}
+      />
 
       {/* Recent observations with review/correct/delete */}
       <h2 className="eyebrow mt-7">What I've noticed</h2>

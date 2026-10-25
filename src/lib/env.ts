@@ -179,15 +179,25 @@ export function backboardStatus(): IntegrationStatus {
   };
 }
 
+/**
+ * Tiger Data is TimescaleDB on PostgreSQL, so "configured" means a postgres://
+ * service URL. TIGERDATA_SERVICE_URL is preferred; TIMESCALE_SERVICE_URL and a
+ * postgres:// TIGERDATA_URL are accepted for older env files.
+ */
+export function tigerDataServiceUrl(): string | null {
+  const candidates = [process.env.TIGERDATA_SERVICE_URL, process.env.TIMESCALE_SERVICE_URL, process.env.TIGERDATA_URL];
+  return candidates.map((v) => v?.trim()).find((v) => !!v && /^postgres(ql)?:\/\//.test(v)) ?? null;
+}
+
 export function tigerDataStatus(): IntegrationStatus {
-  const live = has("TIGERDATA_URL") && has("TIGERDATA_API_KEY");
+  const live = tigerDataServiceUrl() !== null;
   return {
     key: "tigerdata",
     label: "Tiger Data (wellness time series)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — sleep/energy time series stored and trended in Tiger Data (TimescaleDB)."
-      : "Sandbox — a local time-series store with the same interface computes longitudinal trends.",
+      ? "Live: approved sleep/energy observations are mirrored into a Tiger Data hypertable; weekly and monthly trends are computed with time_bucket."
+      : "Sandbox: an in-process time-series store with the same interface computes the same weekly and monthly aggregates.",
   };
 }
 
