@@ -28,6 +28,7 @@
     "demo:backboard": "vite-node --config vitest.config.ts scripts/demo-backboard.ts",
     "demo:tigerdata": "vite-node --config vitest.config.ts scripts/demo-tigerdata.ts",
     "demo:snowflake": "vite-node --config vitest.config.ts scripts/demo-snowflake.ts",
+    "demo:household": "vite-node --config vitest.config.ts scripts/demo-household-report.ts",
     "demo:wellness-full": "vite-node --config vitest.config.ts scripts/demo-wellness-full.ts",
     "redteam:wellness": "vite-node --config vitest.config.ts scripts/redteam-wellness.ts",
     "demo:shopping": "vite-node --config vitest.config.ts scripts/demo-shopping.ts"

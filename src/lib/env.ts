@@ -208,8 +208,8 @@ export function snowflakeStatus(): IntegrationStatus {
     label: "Snowflake (household analytics)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — authorized, consented household aggregates are available to Snowflake."
-      : "Sandbox — authorized household aggregates are computed locally with the same interface; nothing leaves the device.",
+      ? "Live: consented, de-identified household data is summarized in Snowflake (monthly family care report)."
+      : "Sandbox: household aggregates and the monthly care summary are computed locally with the same interface; nothing leaves the device.",
   };
 }
 
