@@ -263,7 +263,7 @@ export class CartesiaVoiceProvider implements VoiceProvider {
   }
 }
 
-const VOICE_KEY = "__Sahaya_cartesia_voice__";
+const VOICE_KEY = "__sahaya_cartesia_voice__";
 
 export function getVoiceProvider(): VoiceProvider {
   const g = globalThis as Record<string, unknown>;

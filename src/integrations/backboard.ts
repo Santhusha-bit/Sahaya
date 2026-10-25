@@ -176,7 +176,7 @@ export class BackboardConversationMemory implements ConversationMemoryProvider {
   }
 }
 
-const GLOBAL_KEY = "__Sahaya_backboard__";
+const GLOBAL_KEY = "__sahaya_backboard__";
 
 export function getConversationMemoryProvider(): ConversationMemoryProvider {
   const g = globalThis as Record<string, unknown>;

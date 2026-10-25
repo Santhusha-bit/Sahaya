@@ -18,6 +18,12 @@ function has(name: string): boolean {
 }
 
 export const AGENT_MODEL = process.env.AGENT_MODEL?.trim() || "claude-opus-4-8";
+
+/** Adaptive thinking is on unless AGENT_THINKING is set to "off" (or "disabled"/"false"). */
+export function isThinkingEnabled(): boolean {
+  const v = process.env.AGENT_THINKING?.trim().toLowerCase();
+  return !(v === "off" || v === "disabled" || v === "false" || v === "0");
+}
 export const AGENT_BITDEER_MODEL = process.env.BITDEER_MODEL?.trim() || "deepseek-ai/DeepSeek-V4-Flash";
 export const AGENT_GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
 
@@ -28,7 +34,7 @@ export function claudeStatus(): IntegrationStatus {
     label: "Claude (agent reasoning)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? `Live — real ${AGENT_MODEL} calls with adaptive thinking and tool use.`
+      ? `Live — real ${AGENT_MODEL} calls with ${isThinkingEnabled() ? "adaptive thinking" : "thinking off (AGENT_THINKING=off)"} and tool use.`
       : "Sandbox — deterministic planner runs the same tools, approvals and memory without an API key.",
   };
 }

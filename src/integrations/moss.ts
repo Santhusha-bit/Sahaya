@@ -139,7 +139,7 @@ export function mossSubject(userId: string): string {
   return createHmac("sha256", salt).update(userId).digest("hex").slice(0, 24);
 }
 
-const GLOBAL_KEY = "__Sahaya_moss__";
+const GLOBAL_KEY = "__sahaya_moss__";
 
 export function getPersonalMemoryProvider(): PersonalMemoryProvider {
   const g = globalThis as Record<string, unknown>;

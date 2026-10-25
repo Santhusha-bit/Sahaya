@@ -412,7 +412,7 @@ export class SnowflakeAnalytics implements AnalyticsProvider {
   }
 }
 
-const GLOBAL_KEY = "__Sahaya_snowflake__";
+const GLOBAL_KEY = "__sahaya_snowflake__";
 
 function env(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
