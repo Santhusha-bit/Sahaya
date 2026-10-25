@@ -118,8 +118,13 @@ export async function getHouseholdAnalytics(opts: {
     return { ok: false, aggregates: [], reason: "Not authorized for that household's analytics." };
   }
   const provider = getAnalyticsProvider();
-  const aggregates = await provider.query({ householdId: opts.targetHouseholdId, authorizedHouseholds: authorized });
-  return { ok: true, aggregates };
+  try {
+    const aggregates = await provider.query({ householdId: opts.targetHouseholdId, authorizedHouseholds: authorized });
+    return { ok: true, aggregates };
+  } catch (err) {
+    // A warehouse outage must not take down the dashboard: report it, show nothing.
+    return { ok: false, aggregates: [], reason: `Household analytics unavailable: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 /** A readable monthly household care report built from aggregates (non-diagnostic). */

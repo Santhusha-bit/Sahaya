@@ -252,6 +252,22 @@ const SCHEMA_DDL = [
 /** Rows per INSERT; keeps each statement well under the binding limits. */
 const INSERT_CHUNK = 100;
 
+/**
+ * Host for SNOWFLAKE_ACCOUNT. Accepts the identifier ("myorg-myaccount",
+ * "xy12345.us-east-2.aws") or a pasted Snowsight/account URL; an underscore in
+ * the account name becomes a hyphen, as Snowflake hostnames require.
+ */
+export function snowflakeAccountHost(account: string): string {
+  const id = account
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/\.snowflakecomputing\.com$/i, "")
+    .toLowerCase()
+    .replace(/_/g, "-");
+  return `${id}.snowflakecomputing.com`;
+}
+
 export class SnowflakeAnalytics implements AnalyticsProvider {
   readonly backend = "snowflake" as const;
   private ready: Promise<void> | null = null;
@@ -259,7 +275,7 @@ export class SnowflakeAnalytics implements AnalyticsProvider {
   constructor(private readonly cfg: SnowflakeConfig) {}
 
   private get baseUrl(): string {
-    return `https://${this.cfg.account}.snowflakecomputing.com/api/v2/statements`;
+    return `https://${snowflakeAccountHost(this.cfg.account)}/api/v2/statements`;
   }
 
   private headers(): Record<string, string> {
@@ -292,6 +308,14 @@ export class SnowflakeAnalytics implements AnalyticsProvider {
       if (!pending.statementHandle) break;
       await new Promise((r) => setTimeout(r, 500));
       res = await fetch(`${this.baseUrl}/${pending.statementHandle}`, { headers: this.headers() });
+    }
+    if (res.status === 404) {
+      // Snowflake answers an unknown account host with a generic HTML 404.
+      throw new Error(
+        `Snowflake account "${this.cfg.account}" was not found at ${snowflakeAccountHost(this.cfg.account)} (404). ` +
+          "Set SNOWFLAKE_ACCOUNT to the account identifier from Snowsight (orgname-accountname) or to locator.region.cloud; " +
+          "a bare locator only works for AWS us-west-2.",
+      );
     }
     if (res.status !== 200) {
       const body = (await res.json().catch(() => ({}))) as { message?: string };
