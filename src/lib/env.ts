@@ -210,6 +210,18 @@ export function checkoutStatus(): IntegrationStatus {
   };
 }
 
+export function nessieStatus(): IntegrationStatus {
+  const live = has("NESSIE_API_KEY");
+  return {
+    key: "nessie",
+    label: "Capital One Nessie (sandbox bank data)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live: Finance reads purchases from a real Capital One Nessie sandbox account (fake money, real API)."
+      : "Sandbox: a local emulator with the same Nessie API shapes holds the test account (set NESSIE_API_KEY for the real Nessie API).",
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -228,6 +240,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     snowflakeStatus(),
     apifyStatus(),
     checkoutStatus(),
+    nessieStatus(),
   ];
 }
 
