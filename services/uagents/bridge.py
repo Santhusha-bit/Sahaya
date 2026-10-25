@@ -26,9 +26,9 @@ from messages import AssistanceRequest, AssistanceResponse
 WELLNESS_PORT = 8020
 GUARDIAN_PORT = 8021
 
-wellness = Agent(name="wellness_bridge", seed="kinline-wellness-bridge-seed", port=WELLNESS_PORT,
+wellness = Agent(name="wellness_bridge", seed="Sahaya-wellness-bridge-seed", port=WELLNESS_PORT,
                  endpoint=[f"http://localhost:{WELLNESS_PORT}/submit"])
-guardian = Agent(name="guardian_bridge", seed="kinline-guardian-bridge-seed", port=GUARDIAN_PORT,
+guardian = Agent(name="guardian_bridge", seed="Sahaya-guardian-bridge-seed", port=GUARDIAN_PORT,
                  endpoint=[f"http://localhost:{GUARDIAN_PORT}/submit"])
 
 # Correlate the async guardian reply back to the waiting REST request by request_id.

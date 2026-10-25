@@ -1,8 +1,8 @@
-# Kinline
+# Sahaya
 
 **Four independent AI agents in one installable care companion.**
 
-Kinline is a mobile-first PWA for older adults and their families. It is **not** one
+Sahaya is a mobile-first PWA for older adults and their families. It is **not** one
 chatbot with four prompts — it runs four separately instantiated agents, each with its
 own persona, tool registry, scoped memory, approval policy, workflows and event
 handlers. They share infrastructure but never each other's private data; they
@@ -24,7 +24,7 @@ npm run dev                  # http://localhost:3000
 npm test                     # isolation + cross-agent permission tests
 ```
 
-**No API keys required.** With keys absent, Kinline runs in **sandbox mode**: a
+**No API keys required.** With keys absent, Sahaya runs in **sandbox mode**: a
 deterministic per-agent planner drives the *same* real tools, approvals, memory and
 event bus — so every workflow is demonstrable offline. Add keys to go live.
 

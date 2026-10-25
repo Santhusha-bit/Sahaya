@@ -2,7 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 /**
- * Convex schema for Kinline. Each table stores the runtime record shape used by
+ * Convex schema for Sahaya. Each table stores the runtime record shape used by
  * the DataLayer. Agent isolation is preserved by always querying on
  * (userId, namespace) for memory and (userId, targetAgent) for events.
  */

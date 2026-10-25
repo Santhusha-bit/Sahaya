@@ -19,7 +19,7 @@ async function main() {
   const USER = "demo-margaret";
 
   line("═");
-  console.log(`KINLINE — Controlled agent actions demo (work-item store: ${backend})`);
+  console.log(`Sahaya — Controlled agent actions demo (work-item store: ${backend})`);
   console.log(`Jira integration: ${jiraStatus().mode} — ${jiraStatus().detail}`);
   line("═");
 

@@ -1,6 +1,6 @@
-# Kinline — Four Independent AI Agents Architecture
+# Sahaya — Four Independent AI Agents Architecture
 
-Build Kinline as a mobile-first, installable Progressive Web Application containing **four separate, fully functional AI agents**.
+Build Sahaya as a mobile-first, installable Progressive Web Application containing **four separate, fully functional AI agents**.
 
 The agents are:
 
@@ -25,11 +25,11 @@ Each agent must be an independently instantiated AI agent with its own:
 - API/service interface
 - Dedicated conversational UI
 
-All four agents operate within one Kinline application and share common infrastructure without losing their independence.
+All four agents operate within one Sahaya application and share common infrastructure without losing their independence.
 
 ## 1. Application Experience
 
-The Kinline home screen should prominently display four interactive agent cards.
+The Sahaya home screen should prominently display four interactive agent cards.
 
 **Guardian**
 "Stay safe and get help when you need it."
@@ -288,7 +288,7 @@ Each agent has a dedicated route:
 - /agents/wellness
 - /agents/finance
 
-Each route should have a distinct, polished interface while retaining Kinline's shared design system.
+Each route should have a distinct, polished interface while retaining Sahaya's shared design system.
 
 ## 10. Technical Implementation
 
@@ -351,4 +351,4 @@ The application is complete only when:
 
 Do not collapse the four agents into a single assistant.
 
-Build four actual AI agents inside one coherent, production-minded Kinline application.
+Build four actual AI agents inside one coherent, production-minded Sahaya application.

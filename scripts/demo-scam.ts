@@ -24,7 +24,7 @@ async function main() {
   await guardian.initialize();
 
   line("═");
-  console.log("KINLINE — Guardian scam workflow demo (sandbox, fictional data)");
+  console.log("Sahaya — Guardian scam workflow demo (sandbox, fictional data)");
   line("═");
   console.log(`\nMargaret receives on her phone:\n  "${MARGARET_SCAM_MESSAGE}"\n`);
 

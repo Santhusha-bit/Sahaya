@@ -87,7 +87,7 @@ export class BackboardHistoricalContext implements HistoricalContextProvider {
   }
 }
 
-const GLOBAL_KEY = "__kinline_backboard__";
+const GLOBAL_KEY = "__Sahaya_backboard__";
 
 export function getHistoricalContextProvider(): HistoricalContextProvider {
   const g = globalThis as Record<string, unknown>;

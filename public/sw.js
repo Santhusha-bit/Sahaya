@@ -1,6 +1,6 @@
-// Kinline service worker — network-first app shell with offline fallback.
+// Sahaya service worker — network-first app shell with offline fallback.
 // Bump CACHE whenever the shell/UI changes so old caches are purged on activate.
-const CACHE = "kinline-v3";
+const CACHE = "Sahaya-v3";
 const SHELL = ["/", "/agents", "/activity", "/family", "/profile", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {

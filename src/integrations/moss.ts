@@ -85,7 +85,7 @@ export class MossPersonalMemory implements PersonalMemoryProvider {
   }
 }
 
-const GLOBAL_KEY = "__kinline_moss__";
+const GLOBAL_KEY = "__Sahaya_moss__";
 
 export function getPersonalMemoryProvider(): PersonalMemoryProvider {
   const g = globalThis as Record<string, unknown>;

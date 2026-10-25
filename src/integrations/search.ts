@@ -107,7 +107,7 @@ export class InMemorySearchIndex implements IncidentSearchIndex {
 /** Live Elasticsearch adapter (same interface). Used only when configured. */
 export class ElasticSearchIndex implements IncidentSearchIndex {
   readonly backend = "elastic" as const;
-  private readonly indexName = "kinline-incidents";
+  private readonly indexName = "sahaya-incidents";
 
   constructor(private readonly url: string, private readonly apiKey: string) {}
 
@@ -161,7 +161,7 @@ export class ElasticSearchIndex implements IncidentSearchIndex {
 }
 
 /** Process-wide singleton (like the data layer). Tests can reset/inject. */
-const GLOBAL_KEY = "__kinline_incident_index__";
+const GLOBAL_KEY = "__Sahaya_incident_index__";
 
 export function getIncidentIndex(): IncidentSearchIndex {
   const g = globalThis as Record<string, unknown>;
