@@ -88,12 +88,25 @@ export class FinanceAgent extends BaseAgent {
         ],
       };
     }
+    if (/no one to help|nobody to help|can'?t do this alone|need someone|help me (file|dispute|enroll)|sit with me/.test(m)) {
+      return {
+        reply: "You don't have to handle this alone. Let me ask Guardian to arrange a person to help you.",
+        toolCalls: [{ name: "requestAssistanceCoordination", input: { need: message.slice(0, 280), urgency: "soon" } }],
+      };
+    }
     if (/benefit|assistance|qualify|help paying/.test(m)) {
       return { reply: "There may be programs that can help.", toolCalls: [{ name: "searchBenefits", input: { topic: message } }] };
     }
+    if (/who are you acting|signed in|logged in|my account|who am i/.test(m)) {
+      return { reply: "Let me confirm who I'm acting for.", toolCalls: [{ name: "checkAuthStatus", input: {} }] };
+    }
+    // Voice-friendly fallback: short, spoken sentences (no lists/markdown) so the
+    // Cartesia / browser synthesizer reads it naturally. Voice and text both land
+    // here via processVoiceInput -> processMessage; keeping replies speakable means
+    // the sandbox path works the same in voice mode.
     return {
       reply:
-        "I can explain bills, audit invoices, find subscriptions, and review spending. What would you like me to look at? (Sandbox mode: add an ANTHROPIC_API_KEY for full conversation.)",
+        "I can explain a bill, check your care-facility invoice, find subscriptions you're paying for, or review your recent spending. Just tell me what you'd like me to look at. (Sandbox mode: add an ANTHROPIC_API_KEY for full conversation.)",
     };
   }
 }

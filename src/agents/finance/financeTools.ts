@@ -1,5 +1,10 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
+import { createWorkItemStore } from "@/integrations/jira";
+import { createFinanceAssistanceBridge, requestFinancialAssistance } from "@/integrations/fetchai";
+import { getDataLayer } from "../base/dataLayer";
+import { getCurrentUser } from "@/lib/user";
+import { auth0Status, jiraStatus } from "@/lib/env";
 
 export const financeTools: AgentTool[] = [
   {
@@ -129,7 +134,8 @@ export const financeTools: AgentTool[] = [
   },
   {
     name: "requestFinancialApproval",
-    description: "Request the person's approval to commit money or submit something official (e.g. file a dispute, pay a bill).",
+    description:
+      "Request the person's approval to commit money or submit something official (e.g. file a dispute, pay a bill). The approved action is also logged as a reviewable controlled action (Atlassian Jira when configured, otherwise the local review store).",
     inputSchema: z.object({ action: z.string().min(1), amount: z.number().optional(), reference: z.string().optional() }),
     requiresApproval: true,
     approvalSummary: (input) => ({
@@ -137,14 +143,102 @@ export const financeTools: AgentTool[] = [
       description: `Finance wants to: ${input.action}${input.reference ? ` (ref ${input.reference})` : ""}.`,
     }),
     async execute(input, ctx) {
-      const rec = await ctx.memory.save("financialActions", { ...input, status: "executed" }, { tags: ["financial-action"] });
+      // The person approved via the local approval gate (requiresApproval above).
+      // Record the controlled action in the work-item review store so it is
+      // auditable: live Jira mirrors each item to an issue; sandbox uses the
+      // local reviewable store with the same interface. Reviewer identity comes
+      // from Auth0 when configured (honest sandbox demo user otherwise).
+      const user = getCurrentUser();
+      const { service: workItems, backend } = createWorkItemStore();
+      let workItemId: string | undefined;
+      try {
+        const wi = await workItems.propose({
+          userId: ctx.userId,
+          requestedAction: input.amount ? `${input.action} ($${input.amount.toFixed(2)})` : input.action,
+          toolName: "requestFinancialApproval",
+          requestingAgent: "finance",
+          assignedAgent: "finance",
+          permissionScope: "finance:commit-money",
+          requiredRole: "caregiver",
+          input,
+        });
+        workItemId = wi.id;
+      } catch {
+        // A review-store failure never blocks the already-approved action.
+      }
+
+      const rec = await ctx.memory.save(
+        "financialActions",
+        { ...input, status: "executed", workItemId, reviewBackend: backend, approvedBy: user.id, authMode: user.authMode },
+        { tags: ["financial-action"] },
+      );
       await ctx.tasks.create({
         title: input.action,
         steps: ["Approved", "Submitted", "Confirmed"],
         status: "in_progress",
         correlationId: ctx.correlationId,
       });
-      return { ok: true, summary: `Done: ${input.action}.`, data: { actionId: rec.id } };
+      const reviewNote = backend === "jira" ? " (mirrored to Jira for review)" : " (logged for review)";
+      return {
+        ok: true,
+        summary: `Done: ${input.action}.${workItemId ? reviewNote : ""}`,
+        data: { actionId: rec.id, workItemId, reviewBackend: backend },
+      };
+    },
+  },
+  {
+    name: "requestAssistanceCoordination",
+    description:
+      "When the person needs a human to help with a financial task they cannot complete alone (e.g. sitting with them to dispute a large overcharge, or completing a benefits enrollment), ask Guardian to coordinate a helper. Carried over the Fetch.ai assistance bridge; records the person's consent first and sends only the minimum needed (need, urgency, consent reference), never the financial detail.",
+    inputSchema: z.object({
+      need: z.string().min(1).max(300),
+      urgency: z.enum(["routine", "soon", "urgent"]).default("soon"),
+    }),
+    async execute(input, ctx) {
+      const consent = await ctx.memory.save(
+        "consents",
+        { purpose: "financial_assistance", need: input.need, grantedAt: Date.now() },
+        { tags: ["consent"] },
+      );
+      const bridge = createFinanceAssistanceBridge({ data: getDataLayer(), consent: undefined });
+      const { response, userMessage } = await requestFinancialAssistance(bridge, {
+        userId: ctx.userId,
+        need: input.need,
+        consentRef: consent.id,
+        urgency: input.urgency,
+      });
+      const ok = response.status === "accepted";
+      return {
+        ok,
+        summary: userMessage,
+        data: { backend: bridge.backend, taskId: response.task_id, status: response.status, consentRef: consent.id },
+        error: ok ? undefined : response.reason,
+      };
+    },
+  },
+  {
+    name: "checkAuthStatus",
+    description:
+      "Report who Finance is acting for and how they are authenticated (Auth0 when configured, otherwise the single demo user). Use when the person asks who you are acting on behalf of, or to confirm sign-in.",
+    inputSchema: z.object({}),
+    async execute() {
+      const user = getCurrentUser();
+      const auth = auth0Status();
+      const jira = jiraStatus();
+      return {
+        ok: true,
+        summary:
+          user.authMode === "live"
+            ? `Acting for ${user.name} (${user.role}), signed in via Auth0.`
+            : `Acting for ${user.name} (${user.role}) in single-user demo mode (Auth0 not configured).`,
+        data: {
+          userId: user.id,
+          role: user.role,
+          authMode: user.authMode,
+          auth0: auth.mode,
+          controlledActionReview: jira.mode === "live" ? "jira" : "local",
+        },
+      };
     },
   },
   {
