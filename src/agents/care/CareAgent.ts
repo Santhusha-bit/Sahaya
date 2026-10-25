@@ -1,5 +1,6 @@
-import { BaseAgent, type AgentConfig, type SandboxPlan } from "../base/BaseAgent";
+import { BaseAgent, type AgentConfig, type AgentReply, type SandboxPlan } from "../base/BaseAgent";
 import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/types";
+import { synthesizeSpeech } from "@/integrations/cartesia";
 import { carePrompt } from "./carePrompt";
 import { careTools } from "./careTools";
 
@@ -27,6 +28,18 @@ export class CareAgent extends BaseAgent {
   };
 
   readonly tools: AgentTool[] = careTools;
+
+  /**
+   * Cartesia voice (landing-page service map: Cartesia for voice). Synthesize a
+   * spoken version of a Care reply so the voice UI can play Care's own voice.
+   * Honest live/sandbox: returns Cartesia MP3 bytes only when CARTESIA_API_KEY is
+   * set; otherwise null so the client falls back to browser SpeechSynthesis. This
+   * lets a voice route turn processVoiceInput()'s reply into audible speech.
+   */
+  async speakReply(reply: Pick<AgentReply, "text">, voiceId?: string): Promise<{ audio: ArrayBuffer; contentType: string } | null> {
+    if (!reply.text.trim()) return null;
+    return synthesizeSpeech(reply.text, voiceId);
+  }
 
   protected async seed(): Promise<void> {
     await this.memory.save("medications", { name: "Lisinopril", dose: "10mg", time: "08:00" });
@@ -97,6 +110,14 @@ export class CareAgent extends BaseAgent {
       });
       return {
         reply: `I've put together your usual groceries — ${lines.length} items for $${total.toFixed(2)}. I just need your approval to place the order (see the card above).`,
+      };
+    }
+    if (/pick ?up|collect|can'?t get to|bring me|drop off|deliver.*medicine|someone to get/.test(m) && /medic|pill|prescription|refill|pharmac/.test(m)) {
+      // Offer to ask Guardian to coordinate a physical helper (authorized cross-agent
+      // assistance request, carried over the Fetch.ai bridge when live).
+      return {
+        reply: "I'll ask Guardian to arrange someone to help collect that for you.",
+        toolCalls: [{ name: "requestPickupHelp", input: { need: "collect a medication/refill the person cannot pick up", urgency: "soon" } }],
       };
     }
     if (/meal|dinner|eat|cook|recipe/.test(m)) {

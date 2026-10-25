@@ -150,6 +150,87 @@ export function createAssistanceBridge(opts?: { data?: DataLayer; consent?: Cons
 }
 
 /**
+ * Care-side assistance coordination over the agent-messaging bridge.
+ *
+ * Care asks Guardian to arrange physical human help (e.g. someone to collect a
+ * medication the person cannot pick up). Live mode posts the typed message to the
+ * Python uAgents service exactly like Wellness; sandbox mode runs the SAME exchange
+ * over the declared in-process `care -> guardian assistance.request` bus event
+ * (policy.ts), so the capability is never falsely labeled Fetch.ai without a
+ * reachable bridge. Only the minimum data crosses (need, urgency, consent ref).
+ */
+export async function requestCareAssistance(
+  input: { data: DataLayer; userId: string; need: string; urgency?: AssistanceRequest["urgency"]; consent?: ConsentSettings; correlationId?: string },
+): Promise<{ ok: boolean; backend: "fetchai" | "sandbox"; taskId: string; userMessage: string; reason?: string }> {
+  const consent = input.consent ?? DEFAULT_CONSENT;
+  const requestId = input.correlationId ?? id("careassist");
+
+  // Live Fetch.ai bridge: send the typed message to the Python uAgents service.
+  if (fetchaiStatus().mode === "live" && process.env.FETCHAI_BRIDGE_URL) {
+    try {
+      const res = await fetch(`${process.env.FETCHAI_BRIDGE_URL.replace(/\/$/, "")}/assistance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          request_id: requestId,
+          from_agent: "care",
+          to_agent: "guardian",
+          user_id: input.userId,
+          need: input.need.slice(0, 300),
+          consent_ref: id("consent"),
+          urgency: input.urgency ?? "soon",
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { task_id?: string; status?: string };
+        const ok = data.status !== "rejected";
+        return {
+          ok,
+          backend: "fetchai",
+          taskId: data.task_id ?? "",
+          userMessage: ok
+            ? "I've asked Guardian to arrange a helper for that, and they've started coordinating."
+            : "I couldn't arrange that help just now, but we can try another way.",
+        };
+      }
+      // Fall through to the in-process bus on a bridge error (honest fallback).
+    } catch {
+      /* fall through to sandbox bus */
+    }
+  }
+
+  // Sandbox: run the declared care -> guardian assistance.request over the bus.
+  const bus = new AgentEventBus(input.data.events, consent);
+  const pub = await bus.publish({
+    sourceAgent: "care",
+    targetAgent: "guardian",
+    type: "assistance.request",
+    userId: input.userId,
+    correlationId: requestId,
+    payload: { need: input.need.slice(0, 300), urgency: input.urgency ?? "soon" },
+  });
+  if (!pub.ok) {
+    return {
+      ok: false,
+      backend: "sandbox",
+      taskId: "",
+      userMessage: "I couldn't arrange that help just now, but we can try another way.",
+      reason: pub.reason,
+    };
+  }
+  const guardian = createAgent("guardian", { data: input.data, userId: input.userId, consent });
+  await guardian.initialize();
+  const task = await guardian.handleEvent(pub.event);
+  await bus.markCompleted(pub.event.id, "accepted via care assistance request");
+  return {
+    ok: true,
+    backend: "sandbox",
+    taskId: task?.id ?? "",
+    userMessage: "I've asked Guardian to arrange a helper for that, and they've started coordinating.",
+  };
+}
+
+/**
  * Wellness-side orchestration: record consent, send the typed request through the
  * bridge, and turn the response into something to say to the person.
  */

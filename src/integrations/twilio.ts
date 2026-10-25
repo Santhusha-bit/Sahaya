@@ -12,6 +12,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { id } from "@/lib/id";
 import { getDataLayer } from "@/agents/base/dataLayer";
 import { createAgent } from "@/agents/registry";
 import { seedMargaretScenario } from "@/agents/guardian/scamScenario";
@@ -115,6 +116,71 @@ export function requestPublicUrl(req: Request): string {
   const proto = req.headers.get("x-forwarded-proto") ?? "https";
   const base = configured ? configured.replace(/\/$/, "") : `${proto}://${host}`;
   return `${base}${u.pathname}`;
+}
+
+/**
+ * Outbound SMS (Care medication reminders / refill-ready notices).
+ *
+ * Honest integration (global rule 1): LIVE only when TWILIO_ACCOUNT_SID +
+ * TWILIO_AUTH_TOKEN + a from-number are set and a recipient is known; otherwise a
+ * deterministic sandbox result with the SAME shape, so Care never claims an SMS
+ * was really sent when it was not. The destination number comes from the caller
+ * (the person's on-file number); nothing is hard-coded.
+ */
+export interface SmsResult {
+  backend: "twilio" | "sandbox";
+  sent: boolean;
+  /** Twilio message SID when live; a synthetic id in sandbox. */
+  sid: string;
+  to: string | null;
+  reason?: string;
+}
+
+/** The Twilio sender number, if configured (E.164). */
+export function twilioFromNumber(): string | null {
+  return process.env.TWILIO_FROM_NUMBER?.trim() || process.env.TWILIO_PHONE_NUMBER?.trim() || null;
+}
+
+export async function sendSms(input: { to?: string | null; body: string }): Promise<SmsResult> {
+  const to = input.to?.trim() || null;
+  const from = twilioFromNumber();
+  const body = input.body.slice(0, 1600);
+
+  // Sandbox: no credentials, no sender, or no recipient -> deterministic, honest.
+  if (!twilioConfigured() || !from || !to) {
+    return {
+      backend: "sandbox",
+      sent: false,
+      sid: id("sms"),
+      to,
+      reason: !twilioConfigured()
+        ? "twilio_not_configured"
+        : !from
+          ? "no_from_number"
+          : "no_recipient_number",
+    };
+  }
+
+  try {
+    const sid = process.env.TWILIO_ACCOUNT_SID!.trim();
+    const token = process.env.TWILIO_AUTH_TOKEN!.trim();
+    const params = new URLSearchParams({ To: to, From: from, Body: body });
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+      method: "POST",
+      headers: {
+        Authorization: "Basic " + Buffer.from(`${sid}:${token}`).toString("base64"),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+    if (!res.ok) {
+      return { backend: "twilio", sent: false, sid: id("sms"), to, reason: `twilio_http_${res.status}` };
+    }
+    const data = (await res.json()) as { sid?: string };
+    return { backend: "twilio", sent: true, sid: data.sid ?? id("sms"), to };
+  } catch (err) {
+    return { backend: "twilio", sent: false, sid: id("sms"), to, reason: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 async function ensureSeeded(userId: string): Promise<void> {
