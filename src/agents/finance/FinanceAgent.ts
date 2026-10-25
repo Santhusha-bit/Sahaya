@@ -16,6 +16,7 @@ export class FinanceAgent extends BaseAgent {
       "What subscriptions am I paying for?",
       "Is my care facility invoice correct?",
       "What was my spending this month?",
+      "Is someone applying for credit in my name?",
     ],
     theme: {
       accent: "#5a6acf",
@@ -65,6 +66,15 @@ export class FinanceAgent extends BaseAgent {
 
   protected async sandboxPlan(message: string, _ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
+    if (/past credit reviews|credit review history|previous credit (check|review)s?/.test(m)) {
+      return { reply: "Here are your past credit reviews and their audit trail.", toolCalls: [{ name: "listCreditReviews", input: {} }] };
+    }
+    if (/credit (report|score|check|file|review)|applying for credit|credit in my name|open(ed)? (an )?account in my name|identity (theft|check|review)|using my (identity|name|details)/.test(m)) {
+      return {
+        reply: "I can check your credit file and identity signals with CRS. I'll ask for your approval first.",
+        toolCalls: [{ name: "reviewCreditAndIdentity", input: { purpose: "identity_protection_review" } }],
+      };
+    }
     if (/subscription|recurring|auto.?pay|paying for/.test(m)) {
       return { reply: "Let me scan your charges for recurring payments.", toolCalls: [{ name: "detectRecurringCharges", input: {} }] };
     }

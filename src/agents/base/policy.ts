@@ -141,6 +141,9 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   wellnessMemory: true,
   /** Contribute authorized, de-identified aggregates to household analytics (Snowflake). */
   wellnessHouseholdAnalytics: true,
+  // --- Finance credit review (CRS) ---
+  /** Finance may run CRS credit/identity reviews (each pull still needs approval). */
+  financeCreditReview: true,
   /** Caregivers may view RAW wellness conversations (off by default — aggregates only). */
   caregiverWellnessRaw: false,
 };
