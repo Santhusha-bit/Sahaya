@@ -62,10 +62,11 @@ export const wellnessTools: AgentTool[] = [
       if (acc.length) summaryParts.push(`Noted: ${acc.join(", ")}.`);
       if (result.needsConfirmation.length) summaryParts.push(`${result.needsConfirmation.length} to confirm.`);
       if (result.rejected.length) summaryParts.push(`${result.rejected.length} unsupported candidate(s) rejected.`);
+      if (result.inferenceError) summaryParts.push(`Model call failed, nothing stored: ${result.inferenceError}`);
       if (!summaryParts.length) summaryParts.push("No clear well-being observations in that message.");
 
       return {
-        ok: true,
+        ok: !result.inferenceError,
         summary: summaryParts.join(" "),
         data: {
           accepted: result.accepted,
@@ -74,6 +75,9 @@ export const wellnessTools: AgentTool[] = [
           savedIds,
           duplicates,
           provenance: result.provenance,
+          sentText: result.sentText,
+          trace: result.trace,
+          inferenceError: result.inferenceError,
           concern: result.accepted.some((o) => ["mood", "sleep_quality", "pain", "appetite"].includes(o.type)),
         },
       };

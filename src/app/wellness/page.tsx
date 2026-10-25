@@ -15,7 +15,7 @@ interface Observation {
   description?: string;
   requiresConfirmation: boolean;
   evidence: string;
-  provenance: { provider: string; model: string; mode: string };
+  provenance: { provider: string; model: string; mode: string; requestId?: string };
   createdAt: number;
   correctedAt?: number;
 }
@@ -42,6 +42,22 @@ interface Dashboard {
   integrations: IntegrationStatus[];
   audit: AuditEntry[];
   backends: { timeseries: string; personalMemory: string };
+}
+/** Response of /api/wellness/extract: one verifiable Bitdeer inference. */
+interface ExtractRun {
+  ok: boolean;
+  summary: string;
+  error?: string;
+  result?: {
+    sentText: string;
+    inferenceError?: string;
+    trace?: { requestId: string; endpoint: string; latencyMs: number; finishReason?: string; usage?: { promptTokens?: number; completionTokens?: number }; rawContent: string };
+    provenance: { provider: string; model: string; mode: string; redactions: number; externalSkipped: boolean };
+    accepted: Observation[];
+    needsConfirmation: Observation[];
+    rejected: { type?: string; reason: string; layer: string }[];
+    savedIds: string[];
+  };
 }
 
 const ACCENT = "#c98a2e";
@@ -90,6 +106,9 @@ export default function WellnessDashboardPage() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [tryText, setTryText] = useState("I haven't been sleeping well lately. I only slept four hours last night.");
+  const [tryBusy, setTryBusy] = useState(false);
+  const [run, setRun] = useState<ExtractRun | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/wellness/dashboard").then((r) => r.json()).then(setData).catch(() => {});
@@ -106,6 +125,17 @@ export default function WellnessDashboardPage() {
       setEditing(null);
     }
   }, [load]);
+
+  const runInference = useCallback(async () => {
+    setTryBusy(true);
+    try {
+      const r = await fetch("/api/wellness/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: tryText }) });
+      setRun(await r.json());
+      load();
+    } finally {
+      setTryBusy(false);
+    }
+  }, [tryText, load]);
 
   const setConsent = useCallback(async (key: string, val: boolean) => {
     setData((d) => (d ? { ...d, consent: { ...d.consent, [key]: val } } : d));
@@ -141,6 +171,47 @@ export default function WellnessDashboardPage() {
         </Link>
       </header>
 
+      {/* Bitdeer inference: one live, verifiable model request */}
+      <h2 className="eyebrow mt-7">Model inference · Bitdeer AI</h2>
+      <p className="mt-1 text-[13px] text-[var(--muted)]">Send one message through the model. Its proposals are checked in code against your words before anything is saved.</p>
+      <section className="card mt-2 p-3.5">
+        <textarea
+          value={tryText} onChange={(e) => setTryText(e.target.value)} rows={2} aria-label="Message to analyze"
+          className="w-full rounded-xl border border-[var(--line)] bg-transparent p-2.5 text-[14px]"
+        />
+        <button onClick={runInference} disabled={tryBusy || !tryText.trim()} className="btn mt-2 rounded-full px-4 py-2 text-[14px] font-semibold text-white disabled:opacity-60" style={{ background: ACCENT }}>
+          {tryBusy ? "Asking the model…" : "Run inference"}
+        </button>
+        {run && (
+          <div className="mt-3 flex flex-col gap-2 text-[12px]">
+            {run.result?.inferenceError || !run.result ? (
+              <div className="rounded-xl bg-red-50 p-2.5 text-red-800">Model call failed, nothing stored: {run.result?.inferenceError ?? run.error ?? run.summary}</div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="pill px-2 py-0.5 font-semibold" style={MODE_STYLE[run.result.provenance.mode] ?? MODE_STYLE.sandbox}>{run.result.provenance.mode}</span>
+                  <span className="font-semibold">{run.result.provenance.provider}/{run.result.provenance.model}</span>
+                  {run.result.trace && <span className="text-[var(--faint)]">· {run.result.trace.latencyMs} ms · tokens {run.result.trace.usage?.promptTokens ?? "-"}/{run.result.trace.usage?.completionTokens ?? "-"}</span>}
+                </div>
+                {run.result.trace && <div className="text-[var(--muted)]">POST {run.result.trace.endpoint}<br />response id <code>{run.result.trace.requestId}</code></div>}
+                <div><span className="font-semibold">Sent ({run.result.provenance.redactions} redaction(s)):</span> “{run.result.sentText}”</div>
+                {run.result.trace && <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-xl bg-black/5 p-2.5 text-[11px]">{run.result.trace.rawContent}</pre>}
+                {run.result.accepted.map((o, i) => (
+                  <div key={`a${i}`}>✓ <b>{TYPE_LABEL[o.type] ?? o.type}</b> {o.value !== undefined ? `${o.value} ${o.unit ?? ""}` : o.description} <span className="italic text-[var(--muted)]">evidence: “{o.evidence}”</span></div>
+                ))}
+                {run.result.needsConfirmation.map((o, i) => (
+                  <div key={`c${i}`}>? <b>{TYPE_LABEL[o.type] ?? o.type}</b> {o.description ?? o.value} <span className="text-[var(--muted)]">(needs confirmation, not stored)</span></div>
+                ))}
+                {run.result.rejected.map((r, i) => (
+                  <div key={`r${i}`} className="text-red-800">✗ {r.type ?? "?"} ({r.layer}): {r.reason}</div>
+                ))}
+                <div className="text-[var(--faint)]">{run.result.savedIds.length} observation(s) stored with this request id as provenance.</div>
+              </>
+            )}
+          </div>
+        )}
+      </section>
+
       {/* Trends */}
       <h2 className="eyebrow mt-7">Sleep &amp; energy trends</h2>
       <div className="mt-2 grid grid-cols-1 gap-2.5">
@@ -174,7 +245,7 @@ export default function WellnessDashboardPage() {
             </div>
             {o.evidence && <div className="mt-1.5 text-[12px] italic leading-snug text-[var(--muted)]">“{o.evidence}”</div>}
             <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--faint)]">
-              <span>via {o.provenance.provider}/{o.provenance.model} ({o.provenance.mode})</span>
+              <span>via {o.provenance.provider}/{o.provenance.model} ({o.provenance.mode}){o.provenance.requestId ? ` · req ${o.provenance.requestId.slice(0, 10)}` : ""}</span>
               {o.requiresConfirmation && <span className="pill bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">needs confirmation</span>}
               {o.correctedAt && <span className="pill bg-blue-100 px-2 py-0.5 font-semibold text-blue-800">corrected</span>}
             </div>
