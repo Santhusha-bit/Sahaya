@@ -7,7 +7,9 @@
  *   3. The deterministic policy engine validates them.
  *   4. Convex (scoped memory) stores the canonical observation.
  *   5. Moss saves permitted continuity context.
- *   6. Backboard stores + retrieves relevant historical context.
+ *   6. Backboard recalls verified long-term conversational context (hobbies,
+ *      family visits) and indexes any new context from this turn. Health
+ *      observations are NOT copied into Backboard (see conversationContext.ts).
  *   7. Tiger Data updates the sleep/energy time series (fed ONLY from canonical
  *      active observations, so deletes and dedup propagate).
  *   8. The historical trend is retrieved.
@@ -21,9 +23,9 @@
 import type { AuditLog } from "@/agents/base/audit";
 import type { ConsentSettings } from "@/agents/base/policy";
 import type { ScopedMemory } from "@/agents/base/types";
-import { getHistoricalContextProvider, type HistoryHit } from "@/integrations/backboard";
 import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
 import { syncContinuity } from "./continuityMemory";
+import { continueFromContext, recallConversationContext, saveConversationContext, type RecalledContext } from "./conversationContext";
 import { extractObservations, type ExtractionResult } from "./extractObservations";
 import { activeObservations, saveObservation, type StoredObservation } from "./wellnessStore";
 
@@ -39,7 +41,9 @@ export interface WellnessTurnResult {
   savedCount: number;
   duplicates: number;
   continuitySaved: number;
-  historical: HistoryHit[];
+  /** Verified long-term context recalled via Backboard (canonical Convex text). */
+  recalled: RecalledContext[];
+  contextSaved: number;
   sleepTrend: Trend;
   energyTrend: Trend;
   followUp: string;
@@ -54,10 +58,11 @@ function energyScore(o: StoredObservation): number | null {
   return null;
 }
 
-/** Non-diagnostic, warm follow-up grounded in the trend + whether we've heard this before. */
-function composeFollowUp(sleepTrend: Trend, historical: HistoryHit[], accepted: StoredObservation[]): string {
-  const mentionedSleep = accepted.some((o) => o.type === "sleep_duration" || o.type === "sleep_quality");
-  const heardBefore = historical.length > 0;
+/** Non-diagnostic, warm follow-up grounded in the trend + what she has told us before. */
+function composeFollowUp(sleepTrend: Trend, recalled: RecalledContext[], accepted: { type: string }[], active: StoredObservation[]): string {
+  const isSleep = (o: { type: string }) => o.type === "sleep_duration" || o.type === "sleep_quality";
+  const mentionedSleep = accepted.some(isSleep);
+  const heardBefore = active.filter(isSleep).length > 1;
   if (mentionedSleep && sleepTrend.direction === "declining") {
     return heardBefore
       ? "I've noticed sleep has come up a few times lately, and it sounds like it's been harder recently. I'm really glad you're telling me. What do you think has been keeping you up?"
@@ -69,7 +74,7 @@ function composeFollowUp(sleepTrend: Trend, historical: HistoryHit[], accepted: 
   if (mentionedSleep) {
     return "Thank you for telling me about your sleep. I'll keep track gently so we can notice any patterns together.";
   }
-  return "Thank you for sharing that with me. I'm here, and I'm listening.";
+  return continueFromContext(recalled) ?? "Thank you for sharing that with me. I'm here, and I'm listening.";
 }
 
 export async function runWellnessTurn(opts: {
@@ -79,6 +84,8 @@ export async function runWellnessTurn(opts: {
   consent: ConsentSettings;
   audit?: AuditLog;
   correlationId?: string;
+  /** Injectable clock (demo/tests simulate "days later"). */
+  now?: number;
 }): Promise<WellnessTurnResult> {
   const { memory, userId, consent } = opts;
   const syncs: SyncStatus[] = [];
@@ -117,21 +124,21 @@ export async function runWellnessTurn(opts: {
     syncs.push({ integration: "moss", mode: c.backend === "moss" ? "live" : "sandbox", ok: c.mossOk, detail: c.detail });
   }
 
-  // Step 6: Backboard — store a short de-identified summary + retrieve relevant history.
-  let historical: HistoryHit[] = [];
-  if (consent.wellnessMemory) {
-    try {
-      const bb = getHistoricalContextProvider();
-      historical = await bb.retrieve({ userId, query: opts.text, limit: 3 });
-      if (extraction.accepted.length) {
-        const topic = extraction.accepted.map((o) => o.type).join(", ");
-        const summary = extraction.accepted.map((o) => (o.value !== undefined ? `${o.type} ${o.value}${o.unit ?? ""}` : `${o.type}: ${o.description}`)).join("; ");
-        await bb.store({ userId, topic, summary });
-      }
-      syncs.push({ integration: "backboard", mode: bb.backend === "backboard" ? "live" : "sandbox", ok: true, detail: `${historical.length} relevant memory(ies) retrieved.` });
-    } catch (err) {
-      syncs.push({ integration: "backboard", mode: "live", ok: false, detail: `Backboard failed: ${err instanceof Error ? err.message : String(err)}` });
+  // Step 6: Backboard. Recall first (so this turn's words are not "remembered"
+  // back at her), then index any new permitted context. Consent is enforced
+  // inside both calls; a failure is reported, never fatal.
+  let recalled: RecalledContext[] = [];
+  let contextSaved = 0;
+  try {
+    const recall = await recallConversationContext({ memory, userId, consent, query: opts.text, audit: opts.audit, correlationId: opts.correlationId, now: opts.now });
+    recalled = recall.recalled;
+    const save = await saveConversationContext({ memory, userId, consent, text: opts.text, audit: opts.audit, correlationId: opts.correlationId, now: opts.now });
+    contextSaved = save.saved.length;
+    if (!recall.blocked) {
+      syncs.push({ integration: "backboard", mode: recall.mode, ok: save.sync?.ok ?? true, detail: `${recall.detail} ${save.sync?.detail ?? ""}`.trim() });
     }
+  } catch (err) {
+    syncs.push({ integration: "backboard", mode: "live", ok: false, detail: `Backboard failed: ${err instanceof Error ? err.message : String(err)}` });
   }
 
   // Step 7: Tiger Data — sync ONLY canonical active observations (idempotent).
@@ -159,14 +166,14 @@ export async function runWellnessTurn(opts: {
   }
 
   // Step 9: contextual, non-diagnostic follow-up.
-  const followUp = composeFollowUp(sleepTrend, historical, active);
+  const followUp = composeFollowUp(sleepTrend, recalled, extraction.accepted, active);
 
   await opts.audit?.record({
     actor: "wellness",
     action: "wellness.turn",
     correlationId: opts.correlationId,
-    detail: { saved: savedCount, duplicates, continuitySaved, historical: historical.length, syncs: syncs.map((s) => ({ i: s.integration, ok: s.ok })) },
+    detail: { saved: savedCount, duplicates, continuitySaved, recalled: recalled.length, contextSaved, syncs: syncs.map((s) => ({ i: s.integration, ok: s.ok })) },
   });
 
-  return { extraction, savedCount, duplicates, continuitySaved, historical, sleepTrend, energyTrend, followUp, syncs };
+  return { extraction, savedCount, duplicates, continuitySaved, recalled, contextSaved, sleepTrend, energyTrend, followUp, syncs };
 }

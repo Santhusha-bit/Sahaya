@@ -28,12 +28,14 @@ interface Trend {
   points: { value: number; at: number }[];
 }
 interface ContinuityItem { id: string; kind: string; text: string; createdAt: number; sync: string; reason?: string }
+interface ContextItem { recordId: string; category: string; topic: string; fact: string; sourceAt: number; correctedAt?: number; syncState: string }
 interface Aggregate { metric: string; value: number; observationCount: number }
 interface AuditEntry { actor: string; action: string; at: number; detail?: Record<string, unknown> }
 interface Dashboard {
   user: { name: string; role: string };
   observations: Observation[];
   continuity: ContinuityItem[];
+  conversationContext: ContextItem[];
   sleepTrend: Trend;
   energyTrend: Trend;
   report: { period: string; headline: string; lines: string[] };
@@ -150,6 +152,7 @@ export default function WellnessDashboardPage() {
   const consentToggles: { key: string; label: string; help: string }[] = [
     { key: "wellnessExternalProcessing", label: "External AI extraction", help: "Allow minimized text to be processed by the Bitdeer model. Off = on-device only." },
     { key: "wellnessMemory", label: "Personal & historical memory", help: "Let Wellness remember continuity and recall past conversations (Moss / Backboard)." },
+    { key: "wellnessConversationMemory", label: "Remember our conversations", help: "Let Wellness remember hobbies and family visits you mention, so it can ask about them later (Backboard). Off = nothing new is saved and nothing is recalled." },
     { key: "wellnessHouseholdAnalytics", label: "Household analytics", help: "Share de-identified aggregates (averages, counts) with authorized family. Never raw conversations." },
     { key: "caregiverWellnessRaw", label: "Caregivers see raw conversations", help: "Off by default. When off, family see only aggregates and authorized updates." },
   ];
@@ -267,6 +270,43 @@ export default function WellnessDashboardPage() {
               <div className="mt-2.5 flex gap-2">
                 <button onClick={() => { setEditing(o.recordId); setEditText(o.value !== undefined ? String(o.value) : o.description ?? ""); }} className="btn rounded-xl bg-[var(--bg-tint)] px-3 py-1.5 text-[13px] font-semibold text-[var(--ink)]">Correct</button>
                 <button disabled={busy} onClick={() => act({ action: "forget", recordId: o.recordId })} className="btn rounded-xl bg-[var(--bg-tint)] px-3 py-1.5 text-[13px] font-semibold text-red-600">Forget</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </section>
+
+      {/* Conversational context (Convex canonical, indexed in Backboard) */}
+      <h2 className="eyebrow mt-7">What you've told me</h2>
+      <p className="mt-1 text-[13px] text-[var(--muted)]">Hobbies and visits I remember so I can ask about them later. Correct or forget anything.</p>
+      <section className="mt-2 flex flex-col gap-2.5">
+        {data.conversationContext.length === 0 && <div className="card p-4 text-[14px] text-[var(--muted)]">Nothing yet. Tell me about your hobbies or who's coming to visit.</div>}
+        {data.conversationContext.map((c) => (
+          <div key={c.recordId} className="card p-3.5">
+            <div className="flex items-center gap-2">
+              <span className="pill px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide" style={{ background: ACCENT_SOFT, color: ACCENT }}>{c.category === "family_visit" ? "Family" : "Hobby"}</span>
+              <span className="text-[15px] font-semibold capitalize">{c.topic}</span>
+              <span className="ml-auto text-[12px] text-[var(--faint)]">{fmtDate(c.sourceAt)}</span>
+            </div>
+            <div className="mt-1.5 text-[14px] leading-snug">“{c.fact}”</div>
+            <div className="mt-1 flex items-center gap-2 text-[11px] text-[var(--faint)]">
+              <span>Backboard: {c.syncState === "synced" ? "in sync" : c.syncState === "pending" ? "update pending (old copy is never used)" : "not indexed"}</span>
+              {c.correctedAt && <span className="pill bg-blue-100 px-2 py-0.5 font-semibold text-blue-800">corrected</span>}
+            </div>
+            {editing === c.recordId ? (
+              <div className="mt-2.5 flex items-center gap-2">
+                <input
+                  autoFocus value={editText} onChange={(e) => setEditText(e.target.value)}
+                  aria-label="Correct what I remember" placeholder="What should I remember?"
+                  className="h-10 flex-1 rounded-xl border border-[var(--line)] px-3 text-[14px] outline-none"
+                />
+                <button disabled={busy || !editText.trim()} onClick={() => act({ action: "correctContext", recordId: c.recordId, fact: editText })} className="btn rounded-xl px-3 py-2 text-[13px] font-semibold text-white" style={{ background: ACCENT }}>Save</button>
+                <button onClick={() => setEditing(null)} className="btn rounded-xl bg-[var(--bg-tint)] px-3 py-2 text-[13px] font-semibold text-[var(--muted)]">Cancel</button>
+              </div>
+            ) : (
+              <div className="mt-2.5 flex gap-2">
+                <button onClick={() => { setEditing(c.recordId); setEditText(c.fact); }} className="btn rounded-xl bg-[var(--bg-tint)] px-3 py-1.5 text-[13px] font-semibold text-[var(--ink)]">Correct</button>
+                <button disabled={busy} onClick={() => act({ action: "forgetContext", recordId: c.recordId })} className="btn rounded-xl bg-[var(--bg-tint)] px-3 py-1.5 text-[13px] font-semibold text-red-600">Forget</button>
               </div>
             )}
           </div>

@@ -26,6 +26,7 @@ export interface ContinuityItem {
 import { getVoiceProvider } from "@/integrations/cartesia";
 import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
 import { activeObservations, type StoredObservation } from "./wellnessStore";
+import { listRememberedContext } from "./conversationContext";
 import {
   DEMO_HOUSEHOLD,
   buildMonthlyReport,
@@ -37,6 +38,8 @@ import type { HouseholdAggregate } from "@/integrations/snowflake";
 export interface WellnessDashboard {
   observations: StoredObservation[];
   continuity: ContinuityItem[];
+  /** Conversational context (Convex canonical; Backboard sync state per item). */
+  conversationContext: { recordId: string; category: string; topic: string; fact: string; sourceAt: number; correctedAt?: number; syncState: string }[];
   sleepTrend: Trend;
   energyTrend: Trend;
   report: { period: string; headline: string; lines: string[] };
@@ -72,6 +75,12 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
   } catch {
     continuity = [];
   }
+
+  // Conversational context is read from Convex (the source of truth), so the
+  // person always reviews the canonical text, not Backboard's copy.
+  const conversationContext = (await listRememberedContext(wellness.memory)).map((r) => ({
+    recordId: r.recordId, category: r.category, topic: r.topic, fact: r.fact, sourceAt: r.sourceAt, correctedAt: r.correctedAt, syncState: r.syncState,
+  }));
 
   // Trends (Tiger Data).
   const ts = getTimeSeriesProvider();
@@ -111,6 +120,7 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
   return {
     observations,
     continuity,
+    conversationContext,
     sleepTrend,
     energyTrend,
     report,

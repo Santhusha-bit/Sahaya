@@ -47,7 +47,7 @@ async function main() {
     const r = await runWellnessTurn({ text, memory: wellness.memory, userId: "margaret", consent: DEFAULT_CONSENT, audit: wellness.audit });
     console.log(`\n▸ "${text}"`);
     for (const o of r.extraction.accepted) console.log(`   extracted: ${o.type} ${o.value ?? ""}${o.unit ?? ""} ${o.description ?? ""}`.trimEnd());
-    if (r.historical.length) console.log(`   history recalled: ${r.historical.map((h) => h.context.topic).join(", ")}`);
+    if (r.recalled.length) console.log(`   context recalled (Backboard, verified): ${r.recalled.map((c) => c.topic).join(", ")}`);
     console.log(`   sleep trend: ${r.sleepTrend.direction} (avg ${r.sleepTrend.average}h over ${r.sleepTrend.count} nights)`);
     console.log(`   Wellness: ${r.followUp}`);
   }
