@@ -46,3 +46,6 @@ yarn-error.log*
 !.vscode/extensions.json
 .idea/
 .vercel
+
+# markdown docs (kept local, not published)
+*.md
