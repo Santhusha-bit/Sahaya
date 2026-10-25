@@ -90,6 +90,14 @@ export async function runWellnessTurn(opts: {
     audit: opts.audit,
     correlationId: opts.correlationId,
   });
+  syncs.push({
+    integration: "bitdeer",
+    mode: extraction.provenance.mode,
+    ok: !extraction.inferenceError,
+    detail: extraction.inferenceError
+      ? `Inference failed, nothing extracted: ${extraction.inferenceError}`
+      : `${extraction.provenance.model} request ${extraction.provenance.requestId ?? "n/a"}: ${extraction.accepted.length} accepted, ${extraction.rejected.length} rejected.`,
+  });
 
   // Step 4: persist canonical (Convex / scoped memory). This is the source of truth.
   let savedCount = 0;

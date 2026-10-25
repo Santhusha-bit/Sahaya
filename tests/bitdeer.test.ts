@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_CONSENT } from "@/agents/base/policy";
 import {
+  BitdeerInferenceAdapter,
   SandboxWellnessInferenceAdapter,
   resetWellnessInferenceProvider,
   setWellnessInferenceProvider,
@@ -89,6 +90,13 @@ describe("observation policy — evidence grounding", () => {
 });
 
 describe("observation policy — units and ranges", () => {
+  it("cites the sentence that actually contains the value as evidence", () => {
+    const raw = { observations: [{ type: "sleep_duration", value: 4, unit: "hours", source: "self_report" }] };
+    const r = validateObservations(raw, "I haven't been sleeping well lately. I only slept four hours last night.");
+    expect(r.accepted).toHaveLength(1);
+    expect(r.accepted[0].evidence).toBe("I only slept four hours last night.");
+  });
+
   it("rejects an impossible sleep value", () => {
     const raw = { observations: [{ type: "sleep_duration", value: 30, unit: "hours", source: "self_report" }] };
     const r = validateObservations(raw, "I slept 30 hours.");
@@ -169,6 +177,9 @@ describe("extraction pipeline — provenance and safety", () => {
     const r = await extractObservations({ text: "I slept five hours.", consent: DEFAULT_CONSENT });
     expect(r.accepted).toHaveLength(0);
     expect(r.rejected).toHaveLength(0);
+    // The failure is reported, not disguised as "no observations".
+    expect(r.inferenceError).toContain("502");
+    expect(r.trace).toBeUndefined();
   });
 
   it("defends against prompt injection inside the message", async () => {
@@ -196,5 +207,61 @@ describe("extraction pipeline — provenance and safety", () => {
     });
     expect(r.accepted).toHaveLength(0);
     expect(r.rejected.some((x) => x.layer === "evidence")).toBe(true);
+  });
+});
+
+describe("BitdeerInferenceAdapter — live request contract (mocked transport)", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  function mockFetch(body: unknown, capture: { url?: string; init?: RequestInit } = {}) {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      capture.url = url;
+      capture.init = init;
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    return capture;
+  }
+
+  const SLEEP_JSON = '{"observations":[{"type":"sleep_duration","value":5,"unit":"hours","source":"self_report"}]}';
+
+  it("sends an OpenAI-compatible request and returns a verifiable trace", async () => {
+    const cap = mockFetch({
+      id: "bd-req-123",
+      choices: [{ finish_reason: "stop", message: { content: SLEEP_JSON } }],
+      usage: { prompt_tokens: 200, completion_tokens: 30, completion_tokens_details: { reasoning_tokens: 0 } },
+    });
+    const adapter = new BitdeerInferenceAdapter("test-key", "deepseek-ai/DeepSeek-V4-Flash", "https://api-inference.bitdeer.ai/v1");
+    const res = await adapter.infer({ text: "I slept five hours." });
+
+    expect(cap.url).toBe("https://api-inference.bitdeer.ai/v1/chat/completions");
+    expect((cap.init?.headers as Record<string, string>).Authorization).toBe("Bearer test-key");
+    const sent = JSON.parse(String(cap.init?.body));
+    expect(sent.model).toBe("deepseek-ai/DeepSeek-V4-Flash");
+    expect(sent.response_format).toEqual({ type: "json_object" });
+    expect(sent.chat_template_kwargs).toEqual({ thinking: false });
+    expect(sent.messages[1].content).toBe("I slept five hours.");
+
+    expect(res.mode).toBe("live");
+    expect(res.trace?.requestId).toBe("bd-req-123");
+    expect(res.trace?.usage?.completionTokens).toBe(30);
+    expect(res.trace?.finishReason).toBe("stop");
+  });
+
+  it("treats a truncated (finish_reason=length) answer as a failure, not empty output", async () => {
+    mockFetch({ id: "bd-req-trunc", choices: [{ finish_reason: "length", message: { content: "" } }] });
+    const adapter = new BitdeerInferenceAdapter("test-key");
+    await expect(adapter.infer({ text: "I slept five hours." })).rejects.toThrow(/truncated/);
+  });
+
+  it("stamps the Bitdeer request id onto each observation's provenance", async () => {
+    mockFetch({ id: "bd-req-456", choices: [{ finish_reason: "stop", message: { content: SLEEP_JSON } }] });
+    setWellnessInferenceProvider(new BitdeerInferenceAdapter("test-key"));
+    const r = await extractObservations({ text: "I slept five hours last night.", consent: DEFAULT_CONSENT });
+    expect(r.accepted).toHaveLength(1);
+    expect(r.accepted[0].provenance).toMatchObject({ provider: "bitdeer", mode: "live", requestId: "bd-req-456" });
+    expect(r.provenance.requestId).toBe("bd-req-456");
   });
 });
