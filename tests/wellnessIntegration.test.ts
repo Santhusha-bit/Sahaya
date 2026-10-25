@@ -13,7 +13,7 @@ import {
 import { resetTimeSeriesProvider, setTimeSeriesProvider, type TimeSeriesProvider } from "@/integrations/tigerdata";
 import { resetAnalyticsProvider } from "@/integrations/snowflake";
 import { resetPersonalMemoryProvider } from "@/integrations/moss";
-import { resetHistoricalContextProvider } from "@/integrations/backboard";
+import { resetConversationMemoryProvider } from "@/integrations/backboard";
 import { resetWellnessInferenceProvider } from "@/integrations/bitdeer";
 
 function wellnessFor(userId = "margaret", consent = DEFAULT_CONSENT): Promise<BaseAgent> {
@@ -26,7 +26,7 @@ afterEach(() => {
   resetTimeSeriesProvider();
   resetAnalyticsProvider();
   resetPersonalMemoryProvider();
-  resetHistoricalContextProvider();
+  resetConversationMemoryProvider();
   resetWellnessInferenceProvider();
 });
 

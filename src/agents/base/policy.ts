@@ -139,6 +139,8 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   wellnessExternalProcessing: true,
   /** Store/retrieve Wellness continuity + historical context (Moss/Backboard). */
   wellnessMemory: true,
+  /** Remember hobbies / family visits mentioned in conversation (Backboard index; Convex canonical). */
+  wellnessConversationMemory: true,
   /** Contribute authorized, de-identified aggregates to household analytics (Snowflake). */
   wellnessHouseholdAnalytics: true,
   /** Caregivers may view RAW wellness conversations (off by default — aggregates only). */

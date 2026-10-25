@@ -156,11 +156,11 @@ export function backboardStatus(): IntegrationStatus {
   const live = has("BACKBOARD_API_KEY");
   return {
     key: "backboard",
-    label: "Backboard (historical context memory)",
+    label: "Backboard (long-term conversational context)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — relevant historical conversation context retrieved from Backboard."
-      : "Sandbox — historical context is retrieved from the Convex/in-process store with the same interface.",
+      ? "Live: consented hobbies / family-visit facts indexed in a per-user Backboard assistant; every hit is re-verified against Convex (version, timestamps, consent) before use."
+      : "Sandbox: an in-process index with the same interface; the same Convex re-verification of every hit applies.",
   };
 }
 
