@@ -16,6 +16,8 @@ import {
 } from "./shopping/service";
 import { backendLabel, prepareCartFromDiscovery, runGroceryDiscovery, usualGroceries } from "./groceryWorkflow";
 import { comparePrices, freshnessOf, type CandidateProduct, type PriceComparison } from "./priceCompare";
+import { CATALOG } from "./catalog";
+import { pantryTools } from "./pantryTools";
 
 /**
  * Resolve the person's on-file contact number for outbound Twilio notifications.
@@ -31,20 +33,6 @@ async function recipientNumber(ctx: { memory: { readShared: (c: string, o?: { li
     return null;
   }
 }
-
-/** Tiny stubbed product catalog so searchProducts returns real, priced results. */
-const CATALOG: { id: string; name: string; price: number; keywords: string[] }[] = [
-  { id: "p_milk", name: "2% Milk, 1 gal", price: 3.79, keywords: ["milk", "dairy"] },
-  { id: "p_bread", name: "Whole Wheat Bread", price: 2.99, keywords: ["bread", "wheat"] },
-  { id: "p_eggs", name: "Large Eggs, dozen", price: 4.29, keywords: ["egg", "eggs"] },
-  { id: "p_bananas", name: "Bananas, bunch", price: 1.89, keywords: ["banana", "fruit"] },
-  { id: "p_oats", name: "Rolled Oats, 18oz", price: 3.49, keywords: ["oats", "oatmeal", "breakfast"] },
-  { id: "p_chicken", name: "Chicken Breast, 1 lb", price: 5.99, keywords: ["chicken", "meat", "protein"] },
-  { id: "p_rice", name: "Brown Rice, 2 lb", price: 2.69, keywords: ["rice", "grain"] },
-  { id: "p_soup", name: "Low-Sodium Veg Soup", price: 2.19, keywords: ["soup", "canned", "vegetable"] },
-  { id: "p_yogurt", name: "Greek Yogurt, 4-pack", price: 4.49, keywords: ["yogurt", "dairy", "protein"] },
-  { id: "p_apples", name: "Apples, 3 lb bag", price: 4.99, keywords: ["apple", "fruit"] },
-];
 
 /**
  * Structured product discovery: find the candidate product Care would normally buy.
@@ -644,4 +632,5 @@ export const careTools: AgentTool[] = [
       return { ok: true, summary: `Pantry updated with ${input.items.length} item(s).`, data: { added: input.items } };
     },
   },
+  ...pantryTools,
 ];

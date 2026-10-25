@@ -269,6 +269,15 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
                 End conversation
               </button>
             )}
+            {meta.id === "care" && (
+              <Link
+                href="/care/pantry"
+                className="btn rounded-full bg-white/25 ring-1 ring-inset ring-white/25 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/40"
+                aria-label="Plan dinner from a pantry photo"
+              >
+                🥕 Pantry
+              </Link>
+            )}
             <button
               onClick={() => setVoiceEnabled((v) => !v)}
               className="btn rounded-full bg-white/25 ring-1 ring-inset ring-white/25 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/40"

@@ -42,6 +42,7 @@ export function shoppingIntent(message: string): ShoppingIntent | null {
   }
   return null;
 }
+import { DEFAULT_FOOD_PREFERENCES } from "./pantryTools";
 
 export class CareAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -59,6 +60,7 @@ export class CareAgent extends BaseAgent {
       "Buy whole milk, coffee and apples",
       "Is my usual milk a good price right now?",
       "Suggest a few easy dinners",
+      "What can I make for dinner from my pantry?",
     ],
     theme: {
       accent: "#4779b8",
@@ -102,6 +104,8 @@ export class CareAgent extends BaseAgent {
     await this.memory.save("pantry", { item: "bananas" }, { tags: ["pantry"] });
     // A couple of usual-order items live in shared household prefs (Care may write shared).
     await this.memory.writeShared("groceryPreferences", { usual: ["milk", "bread", "eggs", "bananas", "oats"] });
+    // Food preferences the meal planner enforces (allergies are hard filters in code).
+    await this.memory.writeShared("dietPreferences", { ...DEFAULT_FOOD_PREFERENCES });
   }
 
   async handleEvent(event: AgentEvent): Promise<AgentTask | null> {
@@ -201,6 +205,19 @@ export class CareAgent extends BaseAgent {
         reply: "I'll ask Guardian to arrange someone to help collect that for you.",
         toolCalls: [{ name: "requestPickupHelp", input: { need: "collect a medication/refill the person cannot pick up", urgency: "soon" } }],
       };
+    }
+    if (/pantry|fridge|refrigerator|photo|what (?:can|should) i (?:make|cook)/.test(m)) {
+      // Pantry-photo flow: confirm the uncertain items first, then plan from what is confirmed.
+      if (/\b(yes|yep|confirm|have (?:them|those|all|it))\b/.test(m) && !/\b(no|not|don'?t)\b/.test(m)) {
+        return {
+          reply: "Thanks for checking.",
+          toolCalls: [
+            { name: "confirmPantryItems", input: { confirmAllUncertain: true } },
+            { name: "planDinnerFromPantry", input: {} },
+          ],
+        };
+      }
+      return { reply: "Let me look at what you have.", toolCalls: [{ name: "planDinnerFromPantry", input: {} }] };
     }
     if (/meal|dinner|eat|cook|recipe/.test(m)) {
       return { reply: "Here are a few easy ideas.", toolCalls: [{ name: "suggestMeals", input: { count: 3 } }] };

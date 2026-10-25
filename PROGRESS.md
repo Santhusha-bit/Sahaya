@@ -289,3 +289,21 @@ evidence and uncertainty.
   conversational observation, plus idempotency/correction/deletion/family/consent
   checks). Tests: `tests/wellnessTimeSeries.test.ts` (13). Suite: 103 tests, 14 files.
 - Live path: set `TIGERDATA_SERVICE_URL=postgres://...`; UNVERIFIED here (no service).
+# Gemini: nutrition and meal assistance (Care) ✅
+- `src/integrations/gemini.ts`: `PantryVisionProvider` + real `GeminiVisionAdapter`
+  (`generateContent`, `x-goog-api-key`, `inline_data` image, JSON output; plain fetch) +
+  `SandboxPantryVisionAdapter` (fixed sample fridge, honestly labeled). Status `gemini`
+  in `/api/status`.
+- `src/agents/care/pantryPolicy.ts` (PURE): schema, food-name sanitizer, instruction-text
+  rejection, confidence gating (>= 0.75 pre-confirmed, < 0.25 dropped, rest uncertain).
+- `src/agents/care/mealPlanner.ts` (PURE): 11 recipes; allergies/vegetarian hard filters;
+  low sodium, soft foods, dislikes, prep time; missing items mapped to the catalog.
+- `src/agents/care/pantryTools.ts`: `scanPantryPhoto` (opaque single-use `imageId`, so no
+  base64 in tool records and the chat model cannot forge a scan), `getPantryScan`,
+  `confirmPantryItems`, `planDinnerFromPantry` (refuses while items are uncertain; drafts a
+  grocery list, never orders), `updateFoodPreferences`. All audited (`pantry.*`).
+- UI: `/care/pantry` (photo, confirm, plan, shopping list) linked from the Care header.
+  API: `/api/care/pantry`.
+- Demo `npm run demo:pantry [-- photo.jpg]`. Tests `tests/pantryNutrition.test.ts` (17).
+- Live Gemini path UNVERIFIED here (no `GEMINI_API_KEY`); request shape is unit-tested
+  against the documented wire format with a mocked fetch.
