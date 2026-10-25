@@ -228,6 +228,14 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
           </div>
         </div>
         <p className="relative mt-2.5 text-[13px] leading-snug text-white/90">{meta.tagline}</p>
+        {meta.id === "care" && (
+          <Link
+            href="/groceries"
+            className="btn relative mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-[13px] font-semibold text-white"
+          >
+            🛒 Grocery run: live prices
+          </Link>
+        )}
       </header>
 
       {/* Status cards */}

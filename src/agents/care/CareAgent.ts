@@ -3,6 +3,13 @@ import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/type
 import { synthesizeSpeech } from "@/integrations/cartesia";
 import { carePrompt } from "./carePrompt";
 import { careTools } from "./careTools";
+import {
+  backendLabel,
+  parseRequestedItems,
+  prepareCartFromDiscovery,
+  runGroceryDiscovery,
+  usualGroceries,
+} from "./groceryWorkflow";
 
 export class CareAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -15,7 +22,8 @@ export class CareAgent extends BaseAgent {
     suggestedCommands: [
       "What medications are due today?",
       "I took my morning blood pressure pill",
-      "I need my usual groceries delivered tomorrow",
+      "Buy my usual groceries",
+      "Buy whole milk, coffee and apples",
       "Suggest a few easy dinners",
     ],
     theme: {
@@ -84,32 +92,25 @@ export class CareAgent extends BaseAgent {
         toolCalls: [{ name: "recordMedicationConfirmation", input: { medicationName: name, taken: true } }],
       };
     }
-    if (/grocer|order|deliver|usual/.test(m)) {
-      // Full §7 workflow: retrieve prefs -> list -> cart -> REQUEST APPROVAL.
-      // Done imperatively here so a real pending approval appears for the user;
-      // approving it runs requestOrderApproval, which places the order and asks
-      // Finance to review the payment.
-      const prefs = await ctx.memory.readShared("groceryPreferences").catch(() => []);
-      const usual = (prefs[0]?.data.usual as string[]) ?? ["milk", "bread", "eggs", "bananas", "oats"];
-      await ctx.memory.save("groceryLists", { items: usual, status: "draft" }, { tags: ["grocery"] });
-      const lines = [
-        { productId: "p_milk", name: "2% Milk, 1 gal", quantity: 1, price: 3.79 },
-        { productId: "p_bread", name: "Whole Wheat Bread", quantity: 1, price: 2.99 },
-        { productId: "p_eggs", name: "Large Eggs, dozen", quantity: 1, price: 4.29 },
-        { productId: "p_bananas", name: "Bananas, bunch", quantity: 1, price: 1.89 },
-        { productId: "p_oats", name: "Rolled Oats, 18oz", quantity: 1, price: 3.49 },
-      ].map((l) => ({ ...l, lineTotal: Number((l.price * l.quantity).toFixed(2)) }));
-      const total = Number(lines.reduce((s, l) => s + l.lineTotal, 0).toFixed(2));
-      const cart = await ctx.memory.save("carts", { lines, total, status: "ready" }, { tags: ["cart"] });
-      await ctx.approvals.request({
-        toolName: "requestOrderApproval",
-        toolInput: { cartId: cart.id },
-        title: "Place grocery order",
-        description: `Care wants to place your usual order: ${lines.length} items, $${total.toFixed(2)}.`,
-        correlationId: ctx.correlationId,
-      });
+    const explicitList = parseRequestedItems(message);
+    if (explicitList || /grocer|order|deliver|usual/.test(m)) {
+      // Full workflow: preferred items -> Apify product discovery -> compare ->
+      // cart -> REQUEST APPROVAL. Done imperatively so a real pending approval
+      // appears for the user; approving it runs requestOrderApproval, which
+      // places the order and asks Finance to review the payment.
+      const items = explicitList ?? (await usualGroceries(ctx));
+      await ctx.memory.save("groceryLists", { items, status: "draft" }, { tags: ["grocery"] });
+      const { discoveryId, discovery } = await runGroceryDiscovery(ctx, items);
+      const cart = await prepareCartFromDiscovery(ctx, discoveryId, { requestApproval: true });
+      const source = backendLabel(discovery);
+      if (!cart.ok) {
+        return { reply: `I searched ${items.length} item(s) using ${source}, but couldn't find current prices to build a cart. Want to try different items?` };
+      }
+      const { plan } = cart;
+      const stores = plan.retailers.length ? ` from ${plan.retailers.slice(0, 3).join(", ")}${plan.retailers.length > 3 ? " and others" : ""}` : "";
+      const missing = plan.missing.length ? ` I couldn't find a price for ${plan.missing.map((x) => x.query).join(", ")}.` : "";
       return {
-        reply: `I've put together your usual groceries — ${lines.length} items for $${total.toFixed(2)}. I just need your approval to place the order (see the card above).`,
+        reply: `I checked fresh prices for ${explicitList ? "your list" : "your usual groceries"} using ${source}. Your cart is ${plan.lines.length} item(s) for $${plan.total.toFixed(2)}${stores}.${missing} Please review it and approve when you're ready (see the card above).`,
       };
     }
     if (/pick ?up|collect|can'?t get to|bring me|drop off|deliver.*medicine|someone to get/.test(m) && /medic|pill|prescription|refill|pharmac/.test(m)) {

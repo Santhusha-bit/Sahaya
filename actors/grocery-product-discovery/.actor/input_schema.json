@@ -1,0 +1,110 @@
+{
+  "title": "Grocery Product Discovery input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "shoppingList": {
+      "title": "Shopping list",
+      "type": "array",
+      "description": "One grocery item per entry. Quantities are optional: \"2 x eggs\", \"eggs x2\" and \"2 eggs\" all work. Entries may also be comma separated. Up to 50 distinct items.",
+      "editor": "stringList",
+      "prefill": ["whole milk", "2 x eggs", "bananas", "whole wheat bread", "rolled oats"],
+      "example": ["whole milk", "2 x eggs", "bananas"]
+    },
+    "sources": {
+      "title": "Sources",
+      "type": "array",
+      "description": "Where to look for products. \"open-prices\" (default, no credentials) combines Open Food Facts product data with crowd-sourced shelf prices reported at named stores. \"kroger\" uses Kroger's official Products API and needs your own Kroger developer credentials below.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": ["open-prices", "kroger"],
+        "enumTitles": ["Open Food Facts + Open Prices (open data)", "Kroger Products API (official, needs credentials)"]
+      },
+      "default": ["open-prices"]
+    },
+    "maxResultsPerItem": {
+      "title": "Max results per item",
+      "type": "integer",
+      "description": "How many ranked product offers to return for each shopping list item.",
+      "minimum": 1,
+      "maximum": 25,
+      "default": 5
+    },
+    "country": {
+      "title": "Country",
+      "type": "string",
+      "description": "ISO country code. Scopes the product search and sets the default currency.",
+      "editor": "select",
+      "enum": ["us", "ca", "gb", "ie", "fr", "de", "es", "it", "nl", "be", "ch", "au", "in"],
+      "enumTitles": ["United States", "Canada", "United Kingdom", "Ireland", "France", "Germany", "Spain", "Italy", "Netherlands", "Belgium", "Switzerland", "Australia", "India"],
+      "default": "us"
+    },
+    "currency": {
+      "title": "Currency override",
+      "type": "string",
+      "description": "Optional ISO currency code (e.g. USD). Defaults to the country's currency.",
+      "editor": "textfield"
+    },
+    "maxPriceAgeDays": {
+      "title": "Max price age (days)",
+      "type": "integer",
+      "description": "Ignore price observations older than this many days.",
+      "minimum": 1,
+      "maximum": 3650,
+      "default": 365
+    },
+    "retailer": {
+      "title": "Retailer filter",
+      "type": "string",
+      "description": "Only keep prices from stores whose name contains this text, e.g. \"Walmart\" or \"Safeway\".",
+      "editor": "textfield"
+    },
+    "latitude": {
+      "title": "Latitude",
+      "type": "number",
+      "description": "Optional. With longitude, only keep prices from stores near this point.",
+      "sectionCaption": "Location (optional)"
+    },
+    "longitude": {
+      "title": "Longitude",
+      "type": "number",
+      "description": "Optional. With latitude, only keep prices from stores near this point."
+    },
+    "radiusKm": {
+      "title": "Radius (km)",
+      "type": "integer",
+      "description": "Search radius around the latitude/longitude.",
+      "minimum": 1,
+      "maximum": 500,
+      "default": 25
+    },
+    "includeUnpriced": {
+      "title": "Include products without a known price",
+      "type": "boolean",
+      "description": "Also return matching products that have no recent price, so every list item resolves to something.",
+      "default": true
+    },
+    "krogerClientId": {
+      "title": "Kroger client ID",
+      "type": "string",
+      "description": "From developer.kroger.com. Required only for the Kroger source.",
+      "editor": "textfield",
+      "sectionCaption": "Kroger (optional)"
+    },
+    "krogerClientSecret": {
+      "title": "Kroger client secret",
+      "type": "string",
+      "description": "From developer.kroger.com. Stored encrypted.",
+      "editor": "textfield",
+      "isSecret": true
+    },
+    "krogerLocationId": {
+      "title": "Kroger store location ID",
+      "type": "string",
+      "description": "8-character Kroger store ID. Required for prices and stock levels.",
+      "editor": "textfield"
+    }
+  },
+  "required": ["shoppingList"]
+}
