@@ -60,6 +60,22 @@ export class FinanceAgent extends BaseAgent {
         correlationId: event.correlationId,
       });
     }
+    if (event.type === "x402.receipt") {
+      const amount = Number(event.payload.amountUsd ?? 0);
+      await this.memory.save(
+        "paidServiceReceipts",
+        { ...event.payload, source: event.sourceAgent, status: "recorded" },
+        { tags: ["x402", String(event.payload.settlement ?? "")] },
+      );
+      return this.taskService.create({
+        title: `Paid data service: $${amount.toFixed(2)} (${event.payload.service})`,
+        description: `Small x402 test payment by Care, authorized by ${event.payload.authorizedBy}. Settlement: ${event.payload.settlement}.`,
+        steps: ["Received", "Recorded"],
+        status: "completed",
+        result: "Recorded in paid-service receipts.",
+        correlationId: event.correlationId,
+      });
+    }
     return super.handleEvent(event);
   }
 

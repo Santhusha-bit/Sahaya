@@ -83,6 +83,7 @@ Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
 | **Cartesia** (voice TTS) | `CARTESIA_API_KEY` set | browser SpeechSynthesis |
 | **Auth0** | `AUTH0_DOMAIN`+`AUTH0_CLIENT_ID` set | single demo user |
 | **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
+| **Coinbase x402** (Care pays for product data, Base Sepolia test USDC only) | `X402_WALLET_PRIVATE_KEY`+`X402_PAY_TO` set | throwaway key + local signature verifier, nothing settles (`npm run demo:x402`) |
 
 To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
 schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.

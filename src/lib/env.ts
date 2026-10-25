@@ -188,6 +188,21 @@ export function snowflakeStatus(): IntegrationStatus {
   };
 }
 
+export function x402Status(): IntegrationStatus {
+  const wallet = /^0x[0-9a-fA-F]{64}$/.test(process.env.X402_WALLET_PRIVATE_KEY?.trim() ?? "");
+  const payTo = /^0x[0-9a-fA-F]{40}$/.test(process.env.X402_PAY_TO?.trim() ?? "");
+  const live = wallet && payTo;
+  const missing = !wallet && !payTo ? "no test wallet or payee configured" : !wallet ? "no test wallet (X402_WALLET_PRIVATE_KEY)" : "no payee (X402_PAY_TO)";
+  return {
+    key: "x402",
+    label: "Coinbase x402 (paid agent services)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? `Live (testnet): Care pays for product data in Base Sepolia test USDC; the service verifies and settles through the x402 facilitator (${process.env.X402_FACILITATOR_URL?.trim() || "https://x402.org/facilitator"}). Mainnet is refused in code.`
+      : `Sandbox: ${missing}. Care signs real x402 payment authorizations with a throwaway key and a local verifier checks them; nothing settles and no funds move.`,
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -204,6 +219,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     backboardStatus(),
     tigerDataStatus(),
     snowflakeStatus(),
+    x402Status(),
   ];
 }
 

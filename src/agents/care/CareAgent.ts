@@ -3,6 +3,7 @@ import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/type
 import { synthesizeSpeech } from "@/integrations/cartesia";
 import { carePrompt } from "./carePrompt";
 import { careTools } from "./careTools";
+import { DEFAULT_MANDATE, grantMandate } from "./paidServices/paidServiceWorkflow";
 
 export class CareAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -17,6 +18,7 @@ export class CareAgent extends BaseAgent {
       "I took my morning blood pressure pill",
       "I need my usual groceries delivered tomorrow",
       "Suggest a few easy dinners",
+      "Compare oats for the best value",
     ],
     theme: {
       accent: "#4779b8",
@@ -48,6 +50,9 @@ export class CareAgent extends BaseAgent {
     await this.memory.save("pantry", { item: "bananas" }, { tags: ["pantry"] });
     // A couple of usual-order items live in shared household prefs (Care may write shared).
     await this.memory.writeShared("groceryPreferences", { usual: ["milk", "bread", "eggs", "bananas", "oats"] });
+    // Previously authorized limit for paid product-data lookups over x402 (test
+    // USDC). Anything above it asks first; changing it requires approval.
+    await grantMandate(this.memory, DEFAULT_MANDATE, "user (onboarding)");
   }
 
   async handleEvent(event: AgentEvent): Promise<AgentTask | null> {
@@ -74,6 +79,17 @@ export class CareAgent extends BaseAgent {
 
   protected async sandboxPlan(message: string, ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
+    if (/paid (data|service|lookup)|spending limit|x402/.test(m)) {
+      return { reply: "Here's your paid-service limit and spending.", toolCalls: [{ name: "getPaidServiceSpending", input: {} }] };
+    }
+    if (/\bcompare\b|best value|cheapest|healthiest|lowest.sodium/.test(m)) {
+      const query = m.match(/\b(oats?|oatmeal|soups?|yogh?urt|milk|bread)\b/)?.[1] ?? m.replace(/.*compare\s+/, "").split(/\s+for\b|[?.!]/)[0].trim();
+      const tier = /detail|nutrition|healthiest|sodium|sugar|protein/.test(m) ? "detailed" : "basic";
+      return {
+        reply: "I'll get a product comparison from the paid product-data service.",
+        toolCalls: [{ name: "compareProducts", input: { query: query || "oats", tier } }],
+      };
+    }
     if (/medication|medicine|pill|dose|due/.test(m) && !/took|taken|skipped/.test(m)) {
       return { reply: "Here's your medication schedule.", toolCalls: [{ name: "getMedicationSchedule", input: { when: "today" } }] };
     }

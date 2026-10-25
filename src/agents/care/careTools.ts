@@ -5,6 +5,7 @@ import { getPersonalMemoryProvider } from "@/integrations/moss";
 import { requestCareAssistance } from "@/integrations/fetchai";
 import { createWorkItemStore } from "@/integrations/jira";
 import { getDataLayer } from "../base/dataLayer";
+import { paidServiceTools } from "./paidServices/paidServiceTools";
 
 /**
  * Resolve the person's on-file contact number for outbound Twilio notifications.
@@ -340,4 +341,5 @@ export const careTools: AgentTool[] = [
       return { ok: true, summary: `Pantry updated with ${input.items.length} item(s).`, data: { added: input.items } };
     },
   },
+  ...paidServiceTools,
 ];
