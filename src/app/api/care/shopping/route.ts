@@ -22,7 +22,7 @@ async function snapshot(userId: string) {
 
 /** Everything the accessible /shop screen shows: cart, pending approval, order tracking. */
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   return NextResponse.json(await snapshot(user.id));
 }
 
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   let record;
   if (body.action === "build") {

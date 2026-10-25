@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ agent: 
   const text = (body.text ?? "").trim();
   if (!text) return NextResponse.json({ error: "Message text is required" }, { status: 400 });
 
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   const via = body.via ?? "text";
 

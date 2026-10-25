@@ -33,13 +33,13 @@ async function snapshot(userId: string) {
 
 /** Everything the /finance/investigate screen shows; polled while an investigation runs. */
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   return NextResponse.json(await snapshot(user.id));
 }
 
 /** "Investigate this bill": queue an investigation through Finance's own tool and dispatch the worker. */
 export async function POST() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   const { record } = await service.runTool("finance", "investigateBill", {});
   if (record.status === "error") return NextResponse.json({ error: record.error ?? record.summary }, { status: 400 });

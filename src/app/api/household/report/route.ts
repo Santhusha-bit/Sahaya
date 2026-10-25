@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * refused with 403.
  */
 async function readReport(period: string, household?: string | null) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const householdId = householdForUser(user.id);
   const res = await getFamilyCareReport({
     requester: { role: user.role, householdId },
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const input = (await req.json().catch(() => ({}))) as { period?: string };
   const period = input.period || periodOf(Date.now());
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const data = getDataLayer();
 
   // Refresh this month's Wellness aggregates through the agent's own audited tool.

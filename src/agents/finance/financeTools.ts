@@ -302,7 +302,7 @@ export const financeTools: AgentTool[] = [
       // auditable: live Jira mirrors each item to an issue; sandbox uses the
       // local reviewable store with the same interface. Reviewer identity comes
       // from Auth0 when configured (honest sandbox demo user otherwise).
-      const user = getCurrentUser();
+      const user = await getCurrentUser();
       const { service: workItems, backend } = createWorkItemStore();
       let workItemId: string | undefined;
       try {
@@ -375,7 +375,7 @@ export const financeTools: AgentTool[] = [
       "Report who Finance is acting for and how they are authenticated (Auth0 when configured, otherwise the single demo user). Use when the person asks who you are acting on behalf of, or to confirm sign-in.",
     inputSchema: z.object({}),
     async execute() {
-      const user = getCurrentUser();
+      const user = await getCurrentUser();
       const auth = auth0Status();
       const jira = jiraStatus();
       return {

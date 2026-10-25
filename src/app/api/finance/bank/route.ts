@@ -31,7 +31,7 @@ async function snapshot(userId: string) {
 
 /** Everything the /money screen shows: connection, latest review, suggestions. */
 export async function GET() {
-  return NextResponse.json(await snapshot(getCurrentUser().id));
+  return NextResponse.json(await snapshot((await getCurrentUser()).id));
 }
 
 /**
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   let record;
   let simulated;

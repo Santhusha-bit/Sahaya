@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const consent = await getConsent(getDataLayer(), user.id);
   return NextResponse.json({ consent, rules: CROSS_AGENT_RULES.map((r) => ({ source: r.source, target: r.target, type: r.type, consentKey: r.consentKey, description: r.description })) });
 }
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const consent = await setConsent(getDataLayer(), user.id, body);
   // Revoking trend tracking purges the Tiger Data mirror immediately (Convex,
   // the canonical record, is untouched).

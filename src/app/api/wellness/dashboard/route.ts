@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const dashboard = await buildWellnessDashboard(getDataLayer(), user.id);
   return NextResponse.json({ user, ...dashboard });
 }

@@ -29,7 +29,7 @@ async function snapshot(userId: string) {
 
 /** The /finance/case screen: latest case, pending approval, audit verification. ?export=1 downloads the evidence packet. */
 export async function GET(req: Request) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (new URL(req.url).searchParams.get("export")) {
     const finance = await financeAgent(user.id);
     const packet = await evidencePacket({ memory: finance.memory });
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
 
   try {

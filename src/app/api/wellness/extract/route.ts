@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   if (!text) return NextResponse.json({ error: "text required" }, { status: 400 });
   if (text.length > 2000) return NextResponse.json({ error: "text too long" }, { status: 400 });
 
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   const service = await AgentService.forUser(user.id);
   const { record } = await service.runTool("wellness", "extractWellnessObservations", { text });
   return NextResponse.json({

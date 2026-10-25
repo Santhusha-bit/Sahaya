@@ -23,6 +23,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ room: s
   const transcript = typeof body.transcript === "string" ? body.transcript.trim() : "";
   if (!transcript) return NextResponse.json({ error: "transcript required" }, { status: 400 });
 
-  const result = await screenCallTranscript({ callId: roomId, userId: getCurrentUser().id, transcript });
+  const result = await screenCallTranscript({ callId: roomId, userId: (await getCurrentUser()).id, transcript });
   return NextResponse.json(result);
 }

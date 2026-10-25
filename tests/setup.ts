@@ -14,3 +14,6 @@ delete process.env.BRIGHTDATA_API_TOKEN;
 delete process.env.GEMINI_API_KEY;
 for (const k of ["CRS_USERNAME", "CRS_USER", "CRS_PASSWORD", "CRS_PASS", "CRS_BASE_URL", "CRS_TEST_PERSONAS", "CRS_LINKED_PERSONA"]) delete process.env[k];
 delete process.env.FACTORY_API_KEY;
+
+// Auth0: single-user demo mode (no sign-in) unless a test opts in.
+for (const k of ["AUTH0_DOMAIN", "AUTH0_CLIENT_ID", "AUTH0_CLIENT_SECRET", "AUTH0_SECRET"]) delete process.env[k];
