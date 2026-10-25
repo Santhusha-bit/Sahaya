@@ -38,12 +38,15 @@
     "demo:x402": "vite-node --config vitest.config.ts scripts/demo-x402.ts",
     "demo:nessie": "vite-node --config vitest.config.ts scripts/demo-nessie.ts",
     "demo:credit": "vite-node --config vitest.config.ts scripts/demo-credit.ts",
-    "demo:finance-case": "vite-node --config vitest.config.ts scripts/demo-finance-case.ts"
+    "demo:finance-case": "vite-node --config vitest.config.ts scripts/demo-finance-case.ts",
+    "demo:investigation": "vite-node --config vitest.config.ts scripts/demo-investigation.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
+    "@factory/droid-sdk": "^0.10.0",
     "@types/pg": "^8.23.1",
     "convex": "^1.17.4",
+    "droid": "^0.249.0",
     "next": "^15.5.28",
     "pg": "^8.23.1",
     "react": "19.1.1",

@@ -14,6 +14,7 @@ export class FinanceAgent extends BaseAgent {
     systemPrompt: financePrompt,
     suggestedCommands: [
       "Check my hospital bill against my insurance EOB",
+      "Investigate this bill",
       "Help me understand this hospital bill",
       "What subscriptions am I paying for?",
       "Is my care facility invoice correct?",
@@ -91,7 +92,7 @@ export class FinanceAgent extends BaseAgent {
     if (/(dispute|billing office).*(status|hear|going|update)|where.*(dispute|case)|track.*(dispute|case)/.test(m)) {
       return { reply: "Let me check on your billing dispute.", toolCalls: [{ name: "trackDisputeCase", input: {} }] };
     }
-    if (/eob|explanation of benefits|against (my )?insurance|duplicate|charged twice|billed twice|investigat/.test(m)) {
+    if (/eob|explanation of benefits|against (my )?insurance|duplicate|charged twice|billed twice/.test(m)) {
       return {
         reply: "I'll compare the hospital statement with your insurance EOB line by line.",
         toolCalls: [{ name: "openBillInvestigation", input: { useSampleDocuments: true } }],
@@ -124,6 +125,12 @@ export class FinanceAgent extends BaseAgent {
       return {
         reply: "I'll check that invoice against the agreed rate.",
         toolCalls: [{ name: "auditCareFacilityInvoice", input: { facility: "Care facility", agreedMonthly: 4500, invoiceTotal: 4850, extras: [{ description: "Laundry", amount: 120 }] } }],
+      };
+    }
+    if (/investigat|dig into|look deeper|overcharg/.test(m)) {
+      return {
+        reply: "I'll hand this bill to an investigation agent and check its work before I tell you anything.",
+        toolCalls: [{ name: "investigateBill", input: {} }],
       };
     }
     if (/bill|hospital|charge|invoice|medical/.test(m)) {
