@@ -202,18 +202,18 @@ export const guardianTools: AgentTool[] = [
       const phone = match?.data.phone ? String(match.data.phone) : undefined;
 
       // Deliver via Twilio SMS when the contact has a phone number. Honest
-      // live/sandbox: sendSms() only returns channel "sms" when a real Twilio
-      // send succeeded, otherwise "sandbox" (nothing left the device). We record
-      // whatever actually happened and never claim an SMS we didn't send.
+      // live/sandbox: sendSms() only reports backend "twilio" with sent=true when a
+      // real Twilio send succeeded, otherwise "sandbox" (nothing left the device).
+      // We record whatever actually happened and never claim an SMS we didn't send.
       let channel: "sms" | "in_app" = "in_app";
       let delivered = true;
       let smsError: string | undefined;
       let smsSid: string | undefined;
       if (phone) {
-        const sms = await sendSms(phone, `Kinline Guardian: ${input.message}`);
-        channel = sms.channel === "sms" ? "sms" : "in_app";
-        delivered = sms.delivered || channel === "in_app";
-        smsError = sms.error;
+        const sms = await sendSms({ to: phone, body: `Kinline Guardian: ${input.message}` });
+        channel = sms.backend === "twilio" && sms.sent ? "sms" : "in_app";
+        delivered = sms.sent || channel === "in_app";
+        smsError = sms.reason;
         smsSid = sms.sid;
       }
 

@@ -265,10 +265,10 @@ export async function runScamScreening(
     let smsSid: string | undefined;
     let smsError: string | undefined;
     if (phone && (alert.channel === "sms" || alert.channel === "phone")) {
-      const sms = await sendSms(phone, `Kinline Guardian: ${alert.message}`);
-      smsDelivered = sms.channel === "sms";
+      const sms = await sendSms({ to: phone, body: `Kinline Guardian: ${alert.message}` });
+      smsDelivered = sms.backend === "twilio" && sms.sent;
       smsSid = sms.sid;
-      smsError = sms.error;
+      smsError = sms.reason;
       deliveredChannel = smsDelivered ? "sms" : "in_app";
     } else if (alert.channel === "sms" || alert.channel === "phone") {
       // No number on file: this routes to the in-app caregiver dashboard instead.

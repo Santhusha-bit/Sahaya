@@ -1,5 +1,25 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
+import { sendSms } from "@/integrations/twilio";
+import { getPersonalMemoryProvider } from "@/integrations/moss";
+import { requestCareAssistance } from "@/integrations/fetchai";
+import { createWorkItemStore } from "@/integrations/jira";
+import { getDataLayer } from "../base/dataLayer";
+
+/**
+ * Resolve the person's on-file contact number for outbound Twilio notifications.
+ * Reads shared household preferences (Care holds shared:read/write). Returns null
+ * when none is on file, so sendSms honestly falls back to a sandbox result.
+ */
+async function recipientNumber(ctx: { memory: { readShared: (c: string, o?: { limit?: number }) => Promise<{ data: Record<string, unknown> }[]> } }): Promise<string | null> {
+  try {
+    const prefs = await ctx.memory.readShared("contact", { limit: 1 });
+    const phone = prefs[0]?.data?.phone;
+    return typeof phone === "string" && phone.trim() ? phone.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Tiny stubbed product catalog so searchProducts returns real, priced results. */
 const CATALOG: { id: string; name: string; price: number; keywords: string[] }[] = [
@@ -31,15 +51,31 @@ export const careTools: AgentTool[] = [
   },
   {
     name: "sendMedicationReminder",
-    description: "Send a reminder for a medication dose.",
+    description: "Send a reminder for a medication dose (via Twilio SMS when configured, otherwise recorded for in-app delivery).",
     inputSchema: z.object({ medicationName: z.string().min(1), time: z.string().optional() }),
     async execute(input, ctx) {
+      const when = input.time ?? "now";
+      // Twilio outbound notify (honest live/sandbox: real SMS only with creds + an
+      // on-file number, otherwise a deterministic sandbox result).
+      const to = await recipientNumber(ctx);
+      const sms = await sendSms({
+        to,
+        body: `Reminder from Sahaya Care: time to take your ${input.medicationName}${when !== "now" ? ` (${when})` : ""}.`,
+      }).catch(() => null);
       const rec = await ctx.memory.save("reminders", {
         medicationName: input.medicationName,
-        time: input.time ?? "now",
+        time: when,
         sent: true,
+        channel: sms?.backend === "twilio" && sms.sent ? "twilio_sms" : "in_app",
+        smsSid: sms?.sid ?? null,
+        smsSent: !!sms?.sent,
       });
-      return { ok: true, summary: `Reminder sent for ${input.medicationName}.`, data: { reminderId: rec.id } };
+      const via = sms?.backend === "twilio" && sms.sent ? " I texted it to your phone." : "";
+      return {
+        ok: true,
+        summary: `Reminder sent for ${input.medicationName}.${via}`,
+        data: { reminderId: rec.id, delivery: sms ? { backend: sms.backend, sent: sms.sent, reason: sms.reason } : null },
+      };
     },
   },
   {
@@ -56,12 +92,27 @@ export const careTools: AgentTool[] = [
         { medicationName: input.medicationName, taken: input.taken, note: input.note },
         { tags: ["medication", input.taken ? "taken" : "skipped"] },
       );
+      // Moss personal memory: keep a small, durable adherence note so Care stays
+      // personal across conversations. Supplementary only — a Moss failure never
+      // corrupts the canonical Convex/scoped record above.
+      let continuityBackend: string | null = null;
+      try {
+        const moss = getPersonalMemoryProvider();
+        await moss.save({
+          userId: ctx.userId,
+          kind: "note",
+          text: `medication ${input.taken ? "taken" : "skipped"}: ${input.medicationName}${input.note ? ` (${input.note})` : ""}`,
+        });
+        continuityBackend = moss.backend;
+      } catch {
+        /* non-fatal: canonical record is already saved */
+      }
       return {
         ok: true,
         summary: input.taken
           ? `Logged ${input.medicationName} as taken. Nice work.`
           : `Noted ${input.medicationName} skipped — I'll check in later.`,
-        data: { confirmationId: rec.id },
+        data: { confirmationId: rec.id, continuity: continuityBackend },
       };
     },
   },
@@ -81,7 +132,47 @@ export const careTools: AgentTool[] = [
         status: "in_progress",
         correlationId: ctx.correlationId,
       });
-      return { ok: true, summary: `Prepared a refill for ${input.medicationName}.`, data: { refillId: rec.id } };
+      // Twilio outbound notify: let the person know the refill is on its way.
+      const to = await recipientNumber(ctx);
+      const sms = await sendSms({
+        to,
+        body: `Sahaya Care: your refill for ${input.medicationName} is being prepared at ${input.pharmacy ?? "your pharmacy"}. We'll let you know when it's ready.`,
+      }).catch(() => null);
+      const via = sms?.backend === "twilio" && sms.sent ? " I texted you a confirmation." : "";
+      return {
+        ok: true,
+        summary: `Prepared a refill for ${input.medicationName}.${via}`,
+        data: { refillId: rec.id, delivery: sms ? { backend: sms.backend, sent: sms.sent, reason: sms.reason } : null },
+      };
+    },
+  },
+  {
+    name: "requestPickupHelp",
+    description:
+      "Ask Guardian to coordinate a person to physically collect a medication or refill the person cannot pick up themselves. An authorized cross-agent assistance request (carried over the Fetch.ai bridge when live).",
+    inputSchema: z.object({
+      need: z.string().min(1).describe("What help is needed, e.g. 'collect Metformin refill from the pharmacy'"),
+      urgency: z.enum(["routine", "soon", "urgent"]).default("soon"),
+    }),
+    async execute(input, ctx) {
+      const outcome = await requestCareAssistance({
+        data: getDataLayer(),
+        userId: ctx.userId,
+        need: input.need,
+        urgency: input.urgency,
+        correlationId: ctx.correlationId,
+      }).catch((err) => ({
+        ok: false,
+        backend: "sandbox" as const,
+        taskId: "",
+        userMessage: "I couldn't arrange that help just now, but we can try another way.",
+        reason: err instanceof Error ? err.message : String(err),
+      }));
+      return {
+        ok: outcome.ok,
+        summary: outcome.userMessage,
+        data: { backend: outcome.backend, taskId: outcome.taskId, reason: outcome.reason },
+      };
     },
   },
   {
@@ -90,6 +181,14 @@ export const careTools: AgentTool[] = [
     inputSchema: z.object({ items: z.array(z.string().min(1)).min(1) }),
     async execute(input, ctx) {
       const rec = await ctx.memory.save("groceryLists", { items: input.items, status: "draft" }, { tags: ["grocery"] });
+      // Moss personal memory: remember what the person likes to buy so Care's
+      // suggestions stay personal over time. Supplementary, non-fatal on failure.
+      try {
+        const moss = getPersonalMemoryProvider();
+        await moss.save({ userId: ctx.userId, kind: "preference", text: `groceries: ${input.items.join(", ")}` });
+      } catch {
+        /* non-fatal: canonical list is already saved */
+      }
       return { ok: true, summary: `Grocery list created with ${input.items.length} item(s).`, data: { listId: rec.id, items: input.items } };
     },
   },
@@ -163,6 +262,29 @@ export const careTools: AgentTool[] = [
         status: "in_progress",
         correlationId: ctx.correlationId,
       });
+      // Atlassian Jira (controlled action review): mirror the placed order to the
+      // work-item store so caregivers have a reviewable record. Live with ATLASSIAN_*
+      // credentials (a Jira issue is created); otherwise the same reviewable sandbox
+      // store. Best-effort — a Jira failure never blocks the order the person approved.
+      let reviewBackend: string | null = null;
+      let reviewItemId: string | null = null;
+      try {
+        const { service, backend } = createWorkItemStore();
+        const item = await service.propose({
+          userId: ctx.userId,
+          requestedAction: `Grocery order placed: ${lines.length} item(s), $${total.toFixed(2)}`,
+          toolName: "requestOrderApproval",
+          requestingAgent: "care",
+          assignedAgent: "care",
+          permissionScope: "care:order",
+          requiredRole: "caregiver",
+          input: { cartId: input.cartId, orderId: order.id, total },
+        });
+        reviewBackend = backend;
+        reviewItemId = item.id;
+      } catch {
+        /* non-fatal: the order is already placed and recorded canonically */
+      }
       // Authorized cross-agent request: ask Finance to review the payment.
       const review = await ctx.bus.publish({
         sourceAgent: "care",
@@ -175,7 +297,7 @@ export const careTools: AgentTool[] = [
       return {
         ok: true,
         summary: `Order placed for $${total.toFixed(2)}.${review.ok ? " Finance will review the payment." : ""}`,
-        data: { orderId: order.id, financeReview: review.ok },
+        data: { orderId: order.id, financeReview: review.ok, review: reviewItemId ? { backend: reviewBackend, itemId: reviewItemId } : null },
       };
     },
   },
