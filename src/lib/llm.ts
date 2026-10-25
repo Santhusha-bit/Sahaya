@@ -95,6 +95,27 @@ export async function llmTurnStream(opts: {
   return toTurn(response);
 }
 
+/**
+ * One-shot structured output: forces Claude to answer by calling `tool`, and
+ * returns that tool's input (or null if the model somehow did not call it).
+ */
+export async function llmStructured(opts: {
+  system: string;
+  user: string;
+  tool: LlmToolSpec;
+  maxTokens?: number;
+}): Promise<Record<string, unknown> | null> {
+  const response = await getClient().messages.create({
+    model: AGENT_MODEL,
+    max_tokens: opts.maxTokens ?? 600,
+    system: opts.system,
+    tools: [opts.tool as unknown as Anthropic.Tool],
+    tool_choice: { type: "tool", name: opts.tool.name },
+    messages: [{ role: "user", content: opts.user }],
+  });
+  return toTurn(response).toolUses.find((t) => t.name === opts.tool.name)?.input ?? null;
+}
+
 function toTurn(response: Anthropic.Message): LlmTurn {
   let text = "";
   const toolUses: LlmToolUse[] = [];

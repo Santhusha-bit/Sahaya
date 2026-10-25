@@ -69,6 +69,13 @@ export default function HomePage() {
             </span>
           </Link>
           <p className="mt-3 text-[13px] font-medium text-[var(--muted)]">Tap to speak</p>
+          <Link
+            href="/call"
+            className="btn pill mt-4 px-4 py-2 text-[14px] font-semibold"
+            style={{ background: "var(--brand-soft)", color: "var(--brand-ink)" }}
+          >
+            Start a protected call
+          </Link>
         </div>
       </section>
 

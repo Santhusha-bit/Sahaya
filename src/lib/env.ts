@@ -68,15 +68,27 @@ export function auth0Status(): IntegrationStatus {
   };
 }
 
+export function callScreeningStatus(): IntegrationStatus {
+  const live = has("ANTHROPIC_API_KEY");
+  return {
+    key: "webrtc-calls",
+    label: "WebRTC + Claude (scam-call screening)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? `Live: in-app WebRTC calls; Claude (${AGENT_MODEL}) screens the caller's live transcript and Guardian warns privately.`
+      : "Sandbox: in-app WebRTC calls are screened by the deterministic scam rules only (no ANTHROPIC_API_KEY).",
+  };
+}
+
 export function twilioStatus(): IntegrationStatus {
   const live = has("TWILIO_ACCOUNT_SID") && has("TWILIO_AUTH_TOKEN");
   return {
     key: "twilio",
-    label: "Twilio Voice (scam-call demo)",
-    mode: live ? "live" : "unavailable",
+    label: "Twilio SMS (caregiver alerts)",
+    mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — callers dial the Twilio number; Guardian screens the transcript and speaks the warning."
-      : "Unavailable — no Twilio credentials; use the in-app voice mic to demo scam-call detection.",
+      ? "Live: Guardian alerts and Care reminders are texted to trusted contacts."
+      : "Sandbox: no Twilio credentials; alerts are recorded in-app and nothing is texted.",
   };
 }
 
@@ -197,6 +209,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     jiraStatus(),
     elasticStatus(),
     fetchaiStatus(),
+    callScreeningStatus(),
     twilioStatus(),
     armadinStatus(),
     mossStatus(),
