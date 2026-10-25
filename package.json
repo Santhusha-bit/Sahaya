@@ -26,7 +26,8 @@
     "demo:snowflake": "vite-node --config vitest.config.ts scripts/demo-snowflake.ts",
     "demo:wellness-full": "vite-node --config vitest.config.ts scripts/demo-wellness-full.ts",
     "redteam:wellness": "vite-node --config vitest.config.ts scripts/redteam-wellness.ts",
-    "demo:x402": "vite-node --config vitest.config.ts scripts/demo-x402.ts"
+    "demo:x402": "vite-node --config vitest.config.ts scripts/demo-x402.ts",
+    "demo:x402-finance": "vite-node --config vitest.config.ts scripts/demo-x402-finance.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

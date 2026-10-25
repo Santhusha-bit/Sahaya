@@ -81,6 +81,30 @@ export class FinanceAgent extends BaseAgent {
 
   protected async sandboxPlan(message: string, _ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
+    if (/report (spending|budget)|paid reports?|x402/.test(m)) {
+      return { reply: "Here's what I've spent on paid reports and the limits.", toolCalls: [{ name: "getFinancialReportSpending", input: {} }] };
+    }
+    if (/benchmark|fair price|typical (cost|price)|financial report|buy (a|the) report/.test(m)) {
+      const region = m.match(/\b(west|northeast|midwest|south)\b/)?.[1] ?? "national";
+      if (/drug|medication|prescription|pharmacy/.test(m)) {
+        const drug = m.match(/\b(lisinopril|metformin|atorvastatin|amlodipine|levothyroxine|omeprazole)\b/)?.[1];
+        const paid = m.match(/\$(\d+(?:\.\d+)?)/)?.[1];
+        return {
+          reply: "I can get a drug-price benchmark report. Let me check the price first.",
+          toolCalls: [{ name: "requestFinancialReport", input: { report: "drug-price-benchmarks", region, context: { drug, pricePaid: paid ? Number(paid) : undefined } } }],
+        };
+      }
+      if (/bill|hospital|medical|doctor|lab/.test(m)) {
+        return {
+          reply: "I can get a medical-billing benchmark report. Let me check the price first.",
+          toolCalls: [{ name: "requestFinancialReport", input: { report: "medical-billing-benchmarks", region, context: { lineItems: [{ description: "Office visit", amount: 180 }, { description: "Lab work", amount: 95 }, { description: "Office visit", amount: 180 }] } } }],
+        };
+      }
+      return {
+        reply: "I can get a care-facility cost benchmark report. Let me check the price first.",
+        toolCalls: [{ name: "requestFinancialReport", input: { report: "care-facility-costs", region, context: { monthlyCost: 4500, extras: [{ description: "Laundry", amount: 120 }] } } }],
+      };
+    }
     if (/subscription|recurring|auto.?pay|paying for/.test(m)) {
       return { reply: "Let me scan your charges for recurring payments.", toolCalls: [{ name: "detectRecurringCharges", input: {} }] };
     }

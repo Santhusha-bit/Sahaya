@@ -5,6 +5,9 @@ import { createFinanceAssistanceBridge, requestFinancialAssistance } from "@/int
 import { getDataLayer } from "../base/dataLayer";
 import { getCurrentUser } from "@/lib/user";
 import { auth0Status, jiraStatus } from "@/lib/env";
+import { financeReportTools } from "./paidReports/financeReportTools";
+import { latestReport } from "./paidReports/financeReportWorkflow";
+import { describeInsights, incorporateReport } from "./paidReports/reportInsights";
 
 export const financeTools: AgentTool[] = [
   {
@@ -23,15 +26,18 @@ export const financeTools: AgentTool[] = [
         if (li.amount > 1000) flags.push(`High charge: ${li.description} ($${li.amount.toFixed(2)})`);
       }
       for (const [desc, count] of seen) if (count > 1) flags.push(`Possible duplicate: ${desc} x${count}`);
+      // If the person approved buying a billing benchmark earlier, check against it too.
+      const report = await latestReport(ctx.memory, "medical-billing-benchmarks");
+      const benchmark = report ? incorporateReport(report, { lineItems: input.lineItems }) : null;
       const rec = await ctx.memory.save(
         "bills",
-        { provider: input.provider, total, lineItems: input.lineItems, flags, status: "analyzed" },
+        { provider: input.provider, total, lineItems: input.lineItems, flags, benchmark, status: "analyzed" },
         { tags: ["bill"] },
       );
       return {
         ok: true,
-        summary: `Bill from ${input.provider}: $${total.toFixed(2)} across ${input.lineItems.length} item(s). ${flags.length ? `${flags.length} flag(s).` : "Nothing unusual."}`,
-        data: { billId: rec.id, total, flags },
+        summary: `Bill from ${input.provider}: $${total.toFixed(2)} across ${input.lineItems.length} item(s). ${flags.length ? `${flags.length} flag(s).` : "Nothing unusual."}${benchmark ? ` Against the purchased benchmark: ${describeInsights(benchmark)}` : ""}`,
+        data: { billId: rec.id, total, flags, benchmark },
       };
     },
   },
@@ -67,11 +73,14 @@ export const financeTools: AgentTool[] = [
       const variance = Number((input.invoiceTotal - input.agreedMonthly - extrasTotal).toFixed(2));
       const flags: string[] = [];
       if (Math.abs(variance) > 0.01) flags.push(`Unexplained variance of $${variance.toFixed(2)}`);
-      const rec = await ctx.memory.save("facilityAudits", { ...input, extrasTotal, variance, flags }, { tags: ["audit"] });
+      // If the person approved buying a cost benchmark earlier, check against it too.
+      const report = await latestReport(ctx.memory, "care-facility-costs");
+      const benchmark = report ? incorporateReport(report, { monthlyCost: input.agreedMonthly, extras: input.extras }) : null;
+      const rec = await ctx.memory.save("facilityAudits", { ...input, extrasTotal, variance, flags, benchmark }, { tags: ["audit"] });
       return {
         ok: true,
-        summary: `${input.facility}: invoice $${input.invoiceTotal.toFixed(2)} vs agreed $${input.agreedMonthly.toFixed(2)} + $${extrasTotal.toFixed(2)} extras. ${flags.length ? flags.join("; ") : "Matches expectations."}`,
-        data: { auditId: rec.id, variance, flags },
+        summary: `${input.facility}: invoice $${input.invoiceTotal.toFixed(2)} vs agreed $${input.agreedMonthly.toFixed(2)} + $${extrasTotal.toFixed(2)} extras. ${flags.length ? flags.join("; ") : "Matches expectations."}${benchmark ? ` Against the purchased benchmark: ${describeInsights(benchmark)}` : ""}`,
+        data: { auditId: rec.id, variance, flags, benchmark },
       };
     },
   },
@@ -276,4 +285,5 @@ export const financeTools: AgentTool[] = [
       };
     },
   },
+  ...financeReportTools,
 ];

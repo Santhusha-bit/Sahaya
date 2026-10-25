@@ -17,7 +17,7 @@
 import { createHash } from "node:crypto";
 import { getAddress } from "viem";
 import { atomicToUsd, usdToAtomic, X402_NETWORKS, type PaymentRequirements } from "@/integrations/x402";
-import { PERMITTED_CATEGORIES, type PaidDataService } from "./registry";
+import { PERMITTED_CATEGORIES, type PaidDataService, type PaidServiceCategory } from "./registry";
 
 /** Absolute ceiling for a single x402 payment, approval or not. */
 export const HARD_CAP_USD = 1.0;
@@ -55,6 +55,8 @@ export interface PolicyInput {
   /** Requirement hash the person explicitly approved, if this is an approved retry. */
   approvedHash?: string;
   now: number;
+  /** Categories the paying agent may buy. Defaults to Care's (product data only). */
+  permittedCategories?: readonly PaidServiceCategory[];
 }
 
 /**
@@ -91,7 +93,7 @@ export function evaluateX402Payment(input: PolicyInput): PolicyDecision {
 
   // ---- Hard rules: refused even with approval ----
   if (!service) return refuse("resource is not a registered paid data service");
-  if (!PERMITTED_CATEGORIES.includes(service.category)) {
+  if (!(input.permittedCategories ?? PERMITTED_CATEGORIES).includes(service.category)) {
     return refuse(`service category "${service.category}" may not be paid via x402 (x402 is not a checkout)`);
   }
   if (r.scheme !== "exact") return refuse(`unsupported payment scheme "${r.scheme}"`);
