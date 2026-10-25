@@ -96,7 +96,7 @@ export function Hero() {
         <motion.div variants={container} initial="hidden" animate="show">
           <motion.span
             variants={item}
-            className="eyebrow mb-5 inline-flex rounded-full border border-line bg-white/70 px-3.5 py-1.5"
+            className="eyebrow mb-5 inline-flex rounded-full border border-line bg-white px-3.5 py-1.5"
           >
             Meet Sahaya — Your AI companion for life
           </motion.span>
@@ -162,7 +162,7 @@ export function Hero() {
           {floatingCards.map((card) => (
             <motion.div
               key={card.title}
-              className={`glass absolute z-20 hidden w-[200px] rounded-2xl p-3 shadow-[0_12px_30px_rgba(23,43,58,0.12)] md:block ${card.pos}`}
+              className={`panel absolute z-20 hidden w-[200px] rounded-2xl p-3 shadow-[0_12px_30px_rgba(23,43,58,0.12)] md:block ${card.pos}`}
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
               animate={
                 reduce

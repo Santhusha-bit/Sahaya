@@ -79,7 +79,7 @@ export function HoverCloud({
       ref={ref}
       role="dialog"
       aria-label={`${tech.name} details`}
-      className="glass fixed z-[90] w-[300px] max-w-[calc(100vw-24px)] rounded-[28px] p-5 shadow-[0_20px_50px_rgba(23,43,58,0.2)]"
+      className="panel fixed z-[90] w-[300px] max-w-[calc(100vw-24px)] rounded-[28px] p-5 shadow-[0_20px_50px_rgba(23,43,58,0.2)]"
       style={{
         top: pos.top,
         left: pos.left,
