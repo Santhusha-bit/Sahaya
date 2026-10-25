@@ -20,7 +20,7 @@ import {
 } from "@/integrations/tigerdata";
 import { resetAnalyticsProvider } from "@/integrations/snowflake";
 import { resetPersonalMemoryProvider } from "@/integrations/moss";
-import { resetHistoricalContextProvider } from "@/integrations/backboard";
+import { resetConversationMemoryProvider } from "@/integrations/backboard";
 import { resetWellnessInferenceProvider } from "@/integrations/bitdeer";
 
 const DAY = 86_400_000;
@@ -56,7 +56,7 @@ afterEach(() => {
   resetTimeSeriesProvider();
   resetAnalyticsProvider();
   resetPersonalMemoryProvider();
-  resetHistoricalContextProvider();
+  resetConversationMemoryProvider();
   resetWellnessInferenceProvider();
 });
 

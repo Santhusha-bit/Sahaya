@@ -17,7 +17,7 @@ import {
   type PersonalMemoryProvider,
 } from "@/integrations/moss";
 import { resetTimeSeriesProvider } from "@/integrations/tigerdata";
-import { resetHistoricalContextProvider } from "@/integrations/backboard";
+import { resetConversationMemoryProvider } from "@/integrations/backboard";
 
 const POOR_SLEEP = "I haven't been sleeping well, maybe four hours a night, and I feel exhausted.";
 
@@ -35,7 +35,7 @@ async function greeting(data: DataLayer, userId = "margaret") {
 afterEach(() => {
   resetPersonalMemoryProvider();
   resetTimeSeriesProvider();
-  resetHistoricalContextProvider();
+  resetConversationMemoryProvider();
   vi.unstubAllGlobals();
 });
 
