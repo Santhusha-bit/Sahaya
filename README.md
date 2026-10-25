@@ -13,12 +13,12 @@ enforced in code, not in a prompt.
 - Live app: https://sahaya-mu.vercel.app
 - Landing page: https://sahaya-landing-pink.vercel.app
 
-| Agent | Does | Never does |
+| Agent | Does |
 |---|---|---|
-| **Guardian** | Scam screening for messages and calls, caller verification, trusted-contact alerts, help coordination | meds, money, check-ins |
-| **Care** | Groceries, carts, price checks, pantry-to-dinner, sandbox checkout | safety, money analysis, emotions |
-| **Wellness** | Daily check-ins, mood/sleep/social observations, continuity, trends, family report | medical advice, bills, safety response |
-| **Finance** | Spending review, credit and identity review, bill vs. insurance investigation, dispute drafts | moving money, meds, groceries |
+| **Guardian** | Scam screening for messages and calls, caller verification, trusted-contact alerts, help coordination | 
+| **Care** | Groceries, carts, price checks, pantry-to-dinner, sandbox checkout |
+| **Wellness** | Daily check-ins, mood/sleep/social observations, continuity, trends, family report | 
+| **Finance** | Spending review, credit and identity review, bill vs. insurance investigation, dispute drafts | 
 
 ## Quick start
 
@@ -34,11 +34,9 @@ same tools, approvals, memory and event bus run against a local stand-in, and ev
 integration is labeled `live`, `sandbox` or `unavailable` on the Profile page and at
 `/api/status`.
 
-## Services we use
+## Sahaya uses
 
-### Platform (all agents)
-
-#### Claude (Anthropic) - Reasoning for every agent
+#### 1. Claude (Anthropic) - Reasoning for every agent
 
 Used as the brain of Guardian, Care, Wellness and Finance: conversation, planning and tool use.
 
@@ -56,7 +54,7 @@ Anthropic provides the Claude models (default `claude-opus-4-8` with adaptive th
 
 **Implementation:** `src/lib/llm.ts` and `src/agents/base/BaseAgent.ts`. Without `ANTHROPIC_API_KEY`, a deterministic per-agent planner drives the same tools.
 
-#### Convex - Canonical data store and event bus
+#### 2. Convex - Canonical data store and event bus
 
 Used as the source of truth for agent memory, cross-agent events, tasks, approvals and conversations.
 
@@ -73,7 +71,7 @@ Convex provides a realtime backend database with server functions.
 
 **Implementation:** `convex/` (schema and functions) and `src/agents/base/dataLayer.ts`. Without `NEXT_PUBLIC_CONVEX_URL`, an in-process store with the same interface is used.
 
-#### Cartesia - Voice in and voice out
+#### 3. Cartesia - Voice in and voice out
 
 Used to give each agent a spoken voice and to transcribe live call audio for scam screening.
 
@@ -90,7 +88,7 @@ Cartesia provides `sonic-3` text-to-speech and `ink-whisper` streaming speech-to
 
 **Implementation:** `src/integrations/cartesia.ts`, `src/lib/cartesiaStt.ts`, `src/app/api/voice/`. Without `CARTESIA_API_KEY`, the browser's built-in speech APIs are used.
 
-#### Auth0 - Who the agents are acting for
+#### 4. Auth0 - Who the agents are acting for
 
 Used to identify the signed-in older adult or caregiver so agents act for the right person.
 
@@ -106,7 +104,7 @@ Auth0 provides hosted login and session management.
 
 **Implementation:** `src/lib/user.ts` and `auth0Status()` in `src/lib/env.ts`. The full login flow (`@auth0/nextjs-auth0` v4, `/auth/login`, `/auth/callback`) is in draft PR #13; until it merges, the app runs as a single demo user.
 
-#### Fetch.ai - Communication between independent agents
+#### 5. Fetch.ai - Communication between independent agents
 
 Used to connect Guardian, Care, Wellness, and Finance through real agent-to-agent messaging.
 
@@ -124,7 +122,7 @@ Fetch.ai provides the uAgents framework and Agentverse infrastructure for indepe
 
 **Implementation:** The existing TypeScript agents stay authoritative. A small Python uAgents service (`services/uagents/`) runs each agent as its own process; the Guardian uAgent verifies the sender and forwards to the app's Guardian intake. See `src/integrations/fetchai.ts`.
 
-#### Atlassian Jira - Human review for sensitive agent actions
+#### 6. Atlassian - Human review for sensitive agent actions
 
 Used to put sensitive and cross-agent actions in front of a human reviewer before anything executes.
 
@@ -142,43 +140,7 @@ Atlassian provides Jira Cloud issues, workflows and the REST API for two-way sta
 
 **Implementation:** `src/integrations/jira.ts`, `src/agents/base/workItems.ts`, `src/agents/base/workItemPolicy.ts`. Without `ATLASSIAN_*` vars, a local work-item store with the same gate is used.
 
-#### Vercel - Hosting
-
-Used to host the app and the landing page.
-
-Vercel provides Git-connected builds and serverless hosting for Next.js.
-
-**End-to-end workflow:**
-1. A change is merged to `main`.
-2. Vercel builds two projects from this one repo: the app (root `.`) and the landing page (root `landing/`).
-3. The new production build goes live at the URLs above.
-4. Any service without env vars set in Vercel runs in sandbox mode on the deployed app.
-
-**Demo:** Open https://sahaya-mu.vercel.app and check `/api/status`.
-
-**Implementation:** `.vercelignore` keeps local env files, `services/`, tests and demo scripts out of the upload.
-
-### Guardian (scam protection)
-
-#### WebRTC + Claude - Live scam-call screening
-
-Used to screen a live call for scam tactics while it is happening and warn the person privately.
-
-WebRTC provides peer-to-peer audio between two browsers; Claude assesses the rolling transcript.
-
-**End-to-end workflow:**
-1. The protected person opens `/call` and shares a room code; the caller joins.
-2. Audio flows peer to peer; the server only relays the connection offer and answer.
-3. The caller's audio is transcribed (Cartesia STT) and the rolling transcript is screened.
-4. Claude and the deterministic scam-signal rules both score it; Claude can raise the risk but never lower it.
-5. At high risk, Guardian's workflow runs once per call: the policy decides, the incident is saved and caregivers are alerted.
-6. Guardian warns the person privately.
-
-**Demo:** On `/call`, press **Play demo scam call**: a fictional "grandson" asks for gift cards and Guardian usually flags it by the second line.
-
-**Implementation:** `src/integrations/webrtc.ts`, `src/integrations/callScreening.ts`, `src/app/api/voice/call/`. Without `ANTHROPIC_API_KEY`, only the deterministic rules screen calls.
-
-#### Elastic - "Has someone tried this scam before?"
+#### 7. Elastic - "Has someone tried this scam before?"
 
 Used to search the person's own past scam incidents so Guardian can say whether a new scam matches an old one.
 
@@ -196,9 +158,7 @@ Elastic provides Elasticsearch full-text and filtered search.
 
 **Implementation:** `src/integrations/search.ts`, `src/agents/guardian/incidentIndexer.ts`, `src/agents/guardian/incidentSummary.ts`. Without `ELASTIC_URL`, a local in-memory index is used.
 
-### Care (groceries, meals, shopping)
-
-#### Visa - Accessible voice shopping
+#### 8. Visa - Accessible voice shopping
 
 Used to turn "I need my usual groceries" into an approved, tracked order without a small-print checkout screen.
 
@@ -216,7 +176,7 @@ Visa's "Reimagining shopping" track inspired the flow; Sahaya ends at a sandbox 
 
 **Implementation:** `src/agents/care/shopping/` and `src/integrations/checkout.ts` (always sandbox: no card number stored, no money moves).
 
-#### Apify - Grocery product discovery
+#### 9. Apify - Grocery product discovery
 
 Used to find real products and prices for a shopping list.
 
@@ -234,7 +194,7 @@ Apify provides Actors (cloud scrapers and data jobs) and an API to run them and 
 
 **Implementation:** `actors/grocery-product-discovery/` (the Actor), `src/integrations/apifyGrocery.ts`, and `src/integrations/apify.ts` for `/shop` product search. Without `APIFY_TOKEN`, the Actor's code runs in-process and is labeled sandbox.
 
-#### Bright Data - Independent price verification
+#### 10. Bright Data - Independent price verification
 
 Used to check whether the product Care would normally buy is a fair price right now.
 
@@ -252,7 +212,7 @@ Bright Data provides the SERP API for structured search results such as Google S
 
 **Implementation:** `src/integrations/brightdata.ts`, `src/agents/care/priceCompare.ts`. Without `BRIGHTDATA_API_TOKEN`, clearly labeled sample listings are used.
 
-#### Google Gemini - Pantry photo to dinner
+#### 11. Google Gemini - Pantry photo to dinner
 
 Used to look at a fridge or pantry photo and suggest what is in it.
 
@@ -270,7 +230,7 @@ Google provides the Gemini multimodal models.
 
 **Implementation:** `src/integrations/gemini.ts`, `src/agents/care/pantryPolicy.ts`, `src/agents/care/mealPlanner.ts`. Without `GEMINI_API_KEY`, a fixed sample detection is used.
 
-#### Coinbase x402 - Agents paying for data, with limits
+#### 12. Coinbase x402 - Agents paying for data, with limits
 
 Used to let Care buy small pieces of product-comparison data from a paid service, under strict spending limits.
 
@@ -288,9 +248,7 @@ Coinbase provides the x402 protocol (HTTP 402 Payment Required) with USDC paymen
 
 **Implementation:** `src/integrations/x402.ts`, `src/agents/care/paidServices/`, `src/app/api/x402/`. Without a test wallet, a throwaway key and a local verifier are used and nothing settles.
 
-### Wellness (check-ins, memory, trends)
-
-#### Bitdeer AI - Structured wellness observations
+#### 13. Bitdeer AI - Structured wellness observations
 
 Used to turn a casual check-in into structured observations about mood, sleep and social contact.
 
@@ -308,7 +266,7 @@ Bitdeer AI provides OpenAI-compatible model inference (default `deepseek-ai/Deep
 
 **Implementation:** `src/integrations/bitdeer.ts`, `src/agents/wellness/extractObservations.ts`. Without `BITDEER_API_KEY`, an offline extractor runs under the same validation.
 
-#### Moss - Conversation continuity
+#### 14. Moss - Conversation continuity
 
 Used to help Wellness pick up where the last conversation left off.
 
@@ -326,7 +284,7 @@ Moss provides fast semantic retrieval over indexed documents.
 
 **Implementation:** `src/integrations/moss.ts`, `src/agents/wellness/continuityMemory.ts`. Without Moss credentials, an in-process index with the same behavior is used.
 
-#### Backboard - Long-term life context
+#### 15. Backboard - Long-term life context
 
 Used to remember the things the person chose to share (hobbies, family visits, plans) across days and weeks.
 
@@ -344,7 +302,7 @@ Backboard provides persistent memory for AI assistants.
 
 **Implementation:** `src/integrations/backboard.ts`, `src/agents/wellness/conversationContext.ts`. Without `BACKBOARD_API_KEY`, an in-process index with the same re-verification is used.
 
-#### Tiger Data - Longitudinal wellness trends
+#### 16. Tiger Data - Longitudinal wellness trends
 
 Used to spot real changes in sleep and energy against the person's own baseline.
 
@@ -362,7 +320,7 @@ Tiger Data provides managed TimescaleDB (Postgres with time-series hypertables).
 
 **Implementation:** `src/integrations/tigerdata.ts`, `src/agents/wellness/timeSeriesSync.ts`, `src/agents/wellness/longitudinalTrends.ts`. Without `TIGERDATA_SERVICE_URL`, an in-process time series is used.
 
-#### Snowflake - Monthly family care report
+#### 17. Snowflake - Monthly family care report
 
 Used to give the family a monthly summary without sharing private details.
 
@@ -380,9 +338,7 @@ Snowflake provides a cloud data warehouse with a SQL REST API.
 
 **Implementation:** `src/integrations/snowflake.ts`, `src/analytics/householdCareExport.ts`, `src/analytics/familyCareReport.ts`. Without Snowflake credentials, the summary is computed locally.
 
-### Finance (spending, credit, bills)
-
-#### Capital One Nessie - Spending review
+#### 18. Capital One Nessie - Spending review
 
 Used to review a checking account for double charges, subscriptions and price increases.
 
@@ -400,25 +356,7 @@ Capital One provides Nessie, a sandbox banking API with test customers, accounts
 
 **Implementation:** `src/integrations/nessie.ts`, `src/agents/finance/nessie/`. Finance has no tool that creates purchases. Without `NESSIE_API_KEY`, a local emulator with Nessie's shapes is used.
 
-#### CRS Credit API - Credit and identity review
-
-Used to check a credit report and identity signals and explain them in plain language.
-
-CRS provides sandbox access to TransUnion credit reports, TransUnion identity verification and AtData FraudFinder.
-
-**End-to-end workflow:**
-1. Margaret asks Finance "Is my credit okay?"
-2. Finance needs her approval and a credit-review consent, and only the linked test identity is allowed.
-3. Finance requests the credit report, identity verification and fraud signals from the CRS sandbox.
-4. Code turns the fields into evidence-backed findings and changes since the last review.
-5. Claude explains the findings (validated in code); next steps come from a fixed table.
-6. The SSN is never stored, and every step is audited.
-
-**Demo:** `npm run demo:credit`.
-
-**Implementation:** `src/integrations/crs.ts`, `src/agents/finance/credit/`. Production CRS hosts and non-test SSNs are refused. Without CRS credentials, a recorded sandbox fixture is used.
-
-#### Hyphenate - Autonomous medical bill investigation
+#### 19. Hyphenate - Autonomous medical bill investigation
 
 Used to find billing errors by comparing a hospital bill with the insurance explanation of benefits (EOB), then dispute them with approval.
 
@@ -436,7 +374,7 @@ The Hyphenate track (autonomous systems for finance) defined the challenge: real
 
 **Implementation:** `src/agents/finance/investigation/` and `src/integrations/billingOffice.ts` (always sandbox; hospitals have no public dispute API). Every step is in a SHA-256 hash-chained audit trail that can be exported as an evidence packet.
 
-#### Factory Droid - Bounded investigation worker
+#### 20. Factory Droid - Bounded investigation worker
 
 Used to hand a bill investigation to a separate execution agent that can only use the tools Sahaya gives it.
 
