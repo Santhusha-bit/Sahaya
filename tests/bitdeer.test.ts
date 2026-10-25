@@ -74,6 +74,18 @@ describe("observation policy — evidence grounding", () => {
     expect(r.accepted).toHaveLength(0);
     expect(r.rejected[0].layer).toBe("evidence");
   });
+
+  it("cites the sentence that states the value, not an earlier context sentence", () => {
+    const raw = { observations: [{ type: "sleep_duration", value: 4, unit: "hours", source: "self_report" }] };
+    const r = validateObservations(raw, "I haven't been sleeping well lately. I only slept four hours last night.");
+    expect(r.accepted[0].evidence).toBe("I only slept four hours last night.");
+  });
+
+  it("does not cite a sentence where the value only appears inside a larger number", () => {
+    const raw = { observations: [{ type: "sleep_duration", value: 4, unit: "hours", source: "self_report" }] };
+    const r = validateObservations(raw, "My grandson turned 14 today. I slept 4 hours.");
+    expect(r.accepted[0].evidence).toBe("I slept 4 hours.");
+  });
 });
 
 describe("observation policy — units and ranges", () => {

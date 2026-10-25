@@ -104,11 +104,23 @@ function numbersInText(text: string): Set<number> {
   return out;
 }
 
-/** Find the source sentence that best supports any of the given needles. */
+/**
+ * Find the source sentence that best supports the given needles. Needles are in
+ * priority order: the first needle found as a whole word wins, so the sentence
+ * that states the value ("four hours") beats one that only shares a context word
+ * ("sleeping"). Substring matching is only a last resort.
+ */
 function supportingSentence(source: string, needles: string | string[]): string {
   const list = (Array.isArray(needles) ? needles : [needles]).map((n) => n.toLowerCase()).filter(Boolean);
   const sentences = source.split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
-  const hit = sentences.find((s) => list.some((n) => s.toLowerCase().includes(n)));
+  const escape = (n: string) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let hit: string | undefined;
+  for (const n of list) {
+    const re = new RegExp(`(?<![a-z0-9.])${escape(n)}(?![a-z0-9]|\\.\\d)`, "i");
+    hit = sentences.find((s) => re.test(s));
+    if (hit) break;
+  }
+  hit ??= sentences.find((s) => list.some((n) => s.toLowerCase().includes(n)));
   return (hit ?? sentences[0] ?? source).trim().slice(0, 200);
 }
 
