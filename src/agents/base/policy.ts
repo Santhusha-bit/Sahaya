@@ -60,6 +60,15 @@ const paymentReview = z.object({
   itemCount: z.number().int().nonnegative(),
 });
 
+const paidServiceReceipt = z.object({
+  purchaseId: z.string().max(80),
+  service: z.string().max(120),
+  amountUsd: z.number().nonnegative().max(1),
+  network: z.string().max(40),
+  settlement: z.enum(["testnet", "sandbox"]),
+  authorizedBy: z.enum(["mandate", "approval"]),
+});
+
 const careAssistRequest = z.object({
   kind: z.enum(["meal", "grocery"]),
   note: z.string().max(300),
@@ -95,6 +104,14 @@ export const CROSS_AGENT_RULES: CrossAgentRule[] = [
     payload: paymentReview,
     consentKey: "careToFinance",
     description: "Care asks Finance to review a grocery payment before it is placed.",
+  },
+  {
+    source: "care",
+    target: "finance",
+    type: "x402.receipt",
+    payload: paidServiceReceipt,
+    consentKey: "careToFinance",
+    description: "Care tells Finance about a small x402 test payment it made for product data.",
   },
   {
     source: "wellness",
@@ -143,13 +160,27 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   caregiverCare: true,
   caregiverWellness: true,
   caregiverFinance: true,
+  /** Index PII-redacted Guardian incidents into the search index ("has this happened before?"). */
+  guardianIncidentSearch: true,
   // --- Wellness (Part 5) ---
   /** Send minimized wellness text to the EXTERNAL Bitdeer model for extraction. */
   wellnessExternalProcessing: true,
   /** Store/retrieve Wellness continuity + historical context (Moss/Backboard). */
   wellnessMemory: true,
+  /** Remember hobbies / family visits mentioned in conversation (Backboard index; Convex canonical). */
+  wellnessConversationMemory: true,
   /** Contribute authorized, de-identified aggregates to household analytics (Snowflake). */
   wellnessHouseholdAnalytics: true,
+  /** Mirror approved numeric observations (sleep hours, energy rating) to Tiger Data for trends. Off = purge the mirror. */
+  wellnessTimeSeriesSync: true,
+  // --- Finance credit review (CRS) ---
+  /** Finance may run CRS credit/identity reviews (each pull still needs approval). */
+  financeCreditReview: true,
   /** Caregivers may view RAW wellness conversations (off by default — aggregates only). */
   caregiverWellnessRaw: false,
+  // --- Household analytics export (Snowflake monthly family care summary) ---
+  /** Export de-identified medication taken/skipped facts (no drug names or notes). */
+  householdAnalyticsMedication: true,
+  /** Export de-identified assistance-request outcomes (no request text). */
+  householdAnalyticsAssistance: true,
 };

@@ -17,9 +17,11 @@ import { jiraStatus } from "@/lib/env";
 import {
   SandboxWorkItemStore,
   WorkItemService,
+  auditHead,
   type WorkItem,
   type WorkItemStore,
 } from "@/agents/base/workItems";
+import { ReviewerDirectory } from "@/agents/base/workItemPolicy";
 
 interface JiraConfig {
   site: string;
@@ -71,12 +73,12 @@ export class JiraWorkItemStore implements WorkItemStore {
     });
   }
 
-  /** Create a Jira issue once; idempotent via the kinline-<id> label. */
+  /** Create a Jira issue once; idempotent via the Sahaya-<id> label. */
   private async ensureIssue(item: WorkItem): Promise<string | undefined> {
     if (item.externalKey) return item.externalKey;
-    const label = `kinline-${item.id}`;
+    const label = `Sahaya-${item.id}`;
     try {
-      const search = await this.api(`/search?jql=${encodeURIComponent(`labels=${label}`)}&fields=key`);
+      const search = await this.api(`/search/jql?jql=${encodeURIComponent(`labels=${label}`)}&fields=key`);
       if (search.ok) {
         const data = (await search.json()) as { issues?: { key: string }[] };
         if (data.issues?.length) return data.issues[0].key;
@@ -88,7 +90,9 @@ export class JiraWorkItemStore implements WorkItemStore {
             project: { key: this.cfg.projectKey },
             summary: `[Sahaya] ${item.requestedAction}`.slice(0, 250),
             description: adf(
-              `Requesting agent: ${item.requestingAgent}\nAssigned agent: ${item.assignedAgent}\nScope: ${item.permissionScope}\nRequired reviewer role: ${item.requiredRole}\nInput hash: ${item.inputHash}`,
+              `Requesting agent: ${item.requestingAgent} | Assigned agent: ${item.assignedAgent} | Scope: ${item.permissionScope} | ` +
+                `Risk: ${item.riskTier} (needs ${item.requiredApprovals} distinct ${item.requiredRole} approval(s)) | Input hash: ${item.inputHash}. ` +
+                `Approve by moving this issue to ${statusNames("approve").join(" or ")}. A transition only counts if your Jira account is bound to a registered Sahaya reviewer; execution is still enforced by the Sahaya gate.`,
             ),
             issuetype: { name: "Task" },
             labels: [label],
@@ -123,9 +127,18 @@ export class JiraWorkItemStore implements WorkItemStore {
   }
 
   async patch(id: string, patch: Partial<WorkItem>): Promise<WorkItem | null> {
+    const before = await this.mirror.get(id);
     const updated = await this.mirror.patch(id, patch);
-    if (updated?.externalKey && patch.status) {
-      await this.comment(updated.externalKey, `Status: ${patch.status}${patch.result ? ` — ${patch.result}` : ""}`);
+    if (!updated?.externalKey) return updated;
+    const statusChanged = patch.status && patch.status !== before?.status;
+    const approvalAdded = patch.approvals && patch.approvals.length !== (before?.approvals?.length ?? 0);
+    if (statusChanged || approvalAdded) {
+      const last = updated.history[updated.history.length - 1];
+      await this.comment(
+        updated.externalKey,
+        `Sahaya: ${updated.status}. ${last ? `${last.actor} ${last.action}${last.detail ? `: ${last.detail}` : ""}. ` : ""}` +
+          `Approvals ${updated.approvals.length}/${updated.requiredApprovals}. Audit head ${auditHead(updated)}.`,
+      );
     }
     return updated;
   }
@@ -133,14 +146,115 @@ export class JiraWorkItemStore implements WorkItemStore {
   async list(userId: string): Promise<WorkItem[]> {
     return this.mirror.list(userId);
   }
+
+  /**
+   * Read the Jira changelog and return status transitions into an approve or
+   * reject status, with the Jira accountId of whoever made them. The caller
+   * (WorkItemService.applyExternalDecision) decides whether they count.
+   */
+  async fetchDecisions(id: string): Promise<JiraDecision[]> {
+    const item = await this.mirror.get(id);
+    if (!item?.externalKey) return [];
+    const res = await this.api(`/issue/${item.externalKey}/changelog?maxResults=100`);
+    if (!res.ok) throw new Error(`Jira changelog ${res.status}`);
+    const data = (await res.json()) as {
+      values?: { id: string; author?: { accountId?: string; displayName?: string }; items?: { field?: string; toString?: string }[] }[];
+    };
+    const approve = statusNames("approve").map((s) => s.toLowerCase());
+    const reject = statusNames("reject").map((s) => s.toLowerCase());
+    const out: JiraDecision[] = [];
+    for (const h of data.values ?? []) {
+      for (const it of h.items ?? []) {
+        if (it.field !== "status" || !it.toString || !h.author?.accountId) continue;
+        const to = it.toString.toLowerCase();
+        const decision = approve.includes(to) ? "approve" : reject.includes(to) ? "reject" : null;
+        if (decision) out.push({ eventId: h.id, accountId: h.author.accountId, displayName: h.author.displayName, decision, statusName: it.toString });
+      }
+    }
+    return out;
+  }
 }
 
-/** Build the right store for the current environment (honest live/sandbox). */
-export function createWorkItemStore(): { service: WorkItemService; backend: "sandbox" | "jira" } {
+export interface JiraDecision {
+  eventId: string;
+  accountId: string;
+  displayName?: string;
+  decision: "approve" | "reject";
+  statusName: string;
+}
+
+function statusNames(kind: "approve" | "reject"): string[] {
+  const raw = kind === "approve" ? process.env.ATLASSIAN_APPROVE_STATUSES : process.env.ATLASSIAN_REJECT_STATUSES;
+  const fallback = kind === "approve" ? "Approved,Done" : "Rejected,Declined,Won't Do";
+  return (raw?.trim() || fallback).split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+export interface WorkItemCoordinator {
+  service: WorkItemService;
+  backend: "sandbox" | "jira";
+  /** Present only when live: pulls Jira decisions and applies the authorized ones. */
+  syncFromJira?: (itemId: string) => Promise<{ applied: number; ignored: number; error?: string }>;
+}
+
+const GLOBAL_KEY = "__sahayaWorkItemCoordinator";
+
+/**
+ * One coordinator per process, so an item proposed by Guardian is the same item
+ * a reviewer approves and Finance executes. (Sandbox state is in memory: it
+ * survives across requests on one server but not across serverless instances.)
+ */
+export function getWorkItemCoordinator(): WorkItemCoordinator {
+  const g = globalThis as unknown as Record<string, WorkItemCoordinator | undefined>;
+  if (g[GLOBAL_KEY]) return g[GLOBAL_KEY]!;
+  const directory = new ReviewerDirectory([]);
   const cfg = readConfig();
+  let coordinator: WorkItemCoordinator;
   if (cfg && jiraStatus().mode === "live") {
     const store = new JiraWorkItemStore(cfg);
-    return { service: new WorkItemService(store), backend: "jira" };
+    const service = new WorkItemService(store, directory);
+    coordinator = {
+      service,
+      backend: "jira",
+      async syncFromJira(itemId) {
+        let decisions: JiraDecision[];
+        try {
+          decisions = await store.fetchDecisions(itemId);
+        } catch (err) {
+          return { applied: 0, ignored: 0, error: err instanceof Error ? err.message : String(err) };
+        }
+        let applied = 0;
+        let ignored = 0;
+        for (const d of decisions) {
+          const r = await service.applyExternalDecision(itemId, {
+            decision: d.decision,
+            externalAccountId: d.accountId,
+            externalEventId: d.eventId,
+            source: "jira",
+            label: `${d.statusName} by ${d.displayName ?? d.accountId}`,
+          });
+          if (r.skipped) continue;
+          if (r.ok) applied++;
+          else ignored++;
+        }
+        return { applied, ignored };
+      },
+    };
+  } else {
+    coordinator = { service: new WorkItemService(new SandboxWorkItemStore(), directory), backend: "sandbox" };
   }
-  return { service: new WorkItemService(new SandboxWorkItemStore()), backend: "sandbox" };
+  g[GLOBAL_KEY] = coordinator;
+  return coordinator;
+}
+
+/** Back-compat helper used by Care/Finance logging; returns the shared coordinator. */
+export function createWorkItemStore(): { service: WorkItemService; backend: "sandbox" | "jira" } {
+  const { service, backend } = getWorkItemCoordinator();
+  return { service, backend };
+}
+
+/** Shared coordinator with the household's reviewer directory loaded. */
+export function getHouseholdCoordinator(userId: string): WorkItemCoordinator {
+  const c = getWorkItemCoordinator();
+  c.service.directory.ensureDemoHousehold(userId);
+  return c;
 }

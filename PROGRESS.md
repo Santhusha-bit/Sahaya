@@ -1,4 +1,4 @@
-# Kinline — Guardian Safety Platform Progress
+# Sahaya — Guardian Safety Platform Progress
 
 Status of the five-track build (see MILESTONES.md for the plans). Run commands
 from the repo root.
@@ -75,6 +75,33 @@ NOTE: the live Jira path is unverified (no Atlassian credentials supplied); it i
 written against Jira Cloud REST API v3 and guarded so it never affects the local
 gate. Falls back to the fully-tested sandbox store.
 
+### Track 3b: Agent security & coordination (Atlassian) ✅ done
+End-to-end: Guardian identifies a task another agent owns, delegates it as a work
+item, authorized family reviewers approve, Finance executes only through the gate,
+and the result plus a tamper-evident trail sync back (Jira when configured).
+- `src/agents/base/workItemPolicy.ts` (PURE): agent capability matrix (who can
+  execute which tool/scope), delegation matrix (who may assign what to whom),
+  risk tiers (payments >= $1,000 need 2 distinct caregivers), and a
+  `ReviewerDirectory` (roles resolved server-side per household, optional Jira
+  accountId binding via `ATLASSIAN_REVIEWER_ACCOUNTS="sarah=<id>,david=<id>"`).
+- `workItems.ts` additions: per-approval records bound to the input hash and
+  expiry; separation of duties (agents, unregistered people, other households and
+  duplicate approvers are refused); hash-chained history (`appendEvent`,
+  `verifyHistory`); gate also refuses `audit_tampered`, `unbacked_approval`
+  (approval with no chained event) and `insufficient_approvals`; approval consumed
+  before the executor runs; `applyExternalDecision` accepts a Jira transition only
+  from a bound reviewer account (else `external_decision_ignored`), idempotent.
+- `jira.ts`: `/search` -> `/search/jql` (410 fix), changelog pull
+  (`fetchDecisions`, statuses via `ATLASSIAN_APPROVE_STATUSES` /
+  `ATLASSIAN_REJECT_STATUSES`, default Approved,Done / Rejected,Declined,Won't Do),
+  Jira comments carry the audit-chain head, process-wide coordinator singleton.
+- Tools: Guardian `delegateToAgent`, Finance `executeDelegatedWorkItem`.
+- UI: `/approvals` (linked from Activity) + `GET/POST /api/work-items`.
+- Tests: `tests/workItems.test.ts` (27). Demo: `npm run demo:approval` (11 checks).
+- Limits: sandbox store is in-memory per server process (not shared across
+  serverless instances); reviewer identities are sandbox demo identities until
+  Auth0 sessions back the directory. Live Jira two-way sync unverified here.
+
 ## Track 4 — Elastic incident search ✅ done
 - `src/integrations/search.ts` — `IncidentSearchIndex` interface; `InMemorySearchIndex`
   (sandbox, keyword overlap + risk boost) and `ElasticSearchIndex` (live, REST) behind
@@ -89,6 +116,29 @@ gate. Falls back to the fully-tested sandbox store.
 - Tests: `tests/incidentSearch.test.ts` (5) — redaction, correct top-1 for 3 queries
   with cited ids, permission scoping, freshly-screened incident becomes searchable.
 - Demo: `npm run demo:search` (top match for the Margaret message + 2 more queries).
+
+### Track 4 end-to-end upgrade (verified live: Convex + Elasticsearch + Claude)
+- Indexing job `src/agents/guardian/incidentIndexer.ts`: projects each saved incident
+  (Convex when live) onto an explicit field ALLOWLIST, redacts PII, and indexes it only
+  when the `guardianIncidentSearch` consent is on (default on). Verification contacts,
+  caregiver names, and policy internals never reach the index. Index failures are
+  audited (`incident.index_skipped`), never fatal to screening. `runIncidentIndexJob`
+  backfills a user's whole history (idempotent by incident id).
+- Search: query scam signals boost incidents with the same tactics (Jaccard in the
+  sandbox, `signals.keyword` boosts in Elastic); `excludeIncidentIds` stops today's
+  incident matching itself; Elastic highlights become evidence snippets. Elastic
+  `term` filters target `.keyword` (bare fields are `text` under dynamic mapping).
+- Summary `src/agents/guardian/incidentSummary.ts`: Claude writes the answer with
+  dates + evidence; code rejects drafts citing unknown incident ids, missing the top
+  match, or asserting "the same caller", falling back to a deterministic template.
+  The not-same-caller caveat is always appended in code. Incident text is fenced as
+  untrusted data in the prompt (it was written by scammers).
+- Demo `npm run demo:search`: 11 dated past attempts saved, indexed, today's call
+  screened, "Has someone tried this scam before?" answered; 6 checks. Uses a throwaway
+  user id and removes its Convex rows + index docs afterward (`KEEP_DEMO_DATA=1` keeps).
+- Tests: +8 (allowlist/no PII leak, consent off indexes nothing, outage not thrown,
+  most-relevant retrieval excluding self, Claude summary accept / same-caller reject /
+  invented-id reject / negated mention allowed).
 
 ## Track 5 — Fetch.ai agent-to-agent messaging ✅ done
 - `services/uagents/` — Python bridge: two real uAgents (wellness + guardian) in a
@@ -111,7 +161,7 @@ gate. Falls back to the fully-tested sandbox store.
 
 ### Track 5b: independent uAgents for all four agents ✅ done (verified live)
 - Each agent is now its OWN uAgent in its OWN process (`guardian_agent.py`,
-  `requester_agent.py wellness|care|finance`, shared `kinline_agents.py`); the old
+  `requester_agent.py wellness|care|finance`, shared `sahaya_agents.py`); the old
   single-Bureau bridge is replaced by `bridge.py`, a launcher that spawns them.
   Local peer resolution (no Almanac/internet needed); `almanac` mode available.
 - Guardian's uAgent verifies the signed envelope sender matches the claimed
@@ -210,3 +260,50 @@ scoped memory and approvals — no infrastructure duplicated.
   here, so all show sandbox; the live code paths activate when creds are added and
   are written to each provider's documented REST shape (live paths UNVERIFIED
   without creds).
+
+## Tiger Data: longitudinal wellness trends ✅
+End-to-end: Wellness extracts a timestamped observation -> Convex saves the
+canonical record -> the sync job mirrors approved numeric observations to Tiger
+Data -> Sahaya queries weekly/monthly aggregates -> Wellness compares the current
+period with the person's own history -> the family dashboard shows the trend with
+evidence and uncertainty.
+- `src/integrations/tigerdata.ts`: real Tiger Data adapter (`pg`, postgres:// service
+  URL, hypertable, aggregates computed in SQL with timezone-aware `time_bucket`) and
+  a sandbox computing identical aggregates via the pure `aggregatePoints`. Replaces
+  the old adapter that called a non-existent HTTP `/sql` endpoint.
+- `src/agents/wellness/timeSeriesSync.ts`: the sync job. Reconciles (insert / update
+  corrected / remove deleted), idempotent on observation id, excludes records that
+  need confirmation, consent key `wellnessTimeSeriesSync` (off = purge the mirror,
+  Convex untouched), never throws, audited, records last-run freshness.
+  Fixes a real gap: deletions/corrections previously never reached the mirror (W29
+  only passed by resetting the in-memory provider; it now checks the same mirror).
+- `src/agents/wellness/longitudinalTrends.ts`: current period vs personal baseline;
+  "lower/higher" only when >= 0.5 and beyond the 95% noise interval, else "similar";
+  confidence + margin + plain reasons; evidence = canonical observations behind the
+  current period (quotes hidden from family unless `caregiverWellnessRaw`).
+- `GET/POST /api/wellness/trends`, `WellnessTrendsCard` on `/family` and `/wellness`
+  (bars + 95% whiskers + dashed "usual" line, hatched sparse weeks, hover tooltips,
+  evidence list, "Tell" box, labeled fictional demo-history button).
+- Evidence fix in `observationPolicy.ts`: the quote is the sentence stating the number.
+- Demo: `npm run demo:tigerdata` (multi-week sleep trend updates after a new
+  conversational observation, plus idempotency/correction/deletion/family/consent
+  checks). Tests: `tests/wellnessTimeSeries.test.ts` (13). Suite: 103 tests, 14 files.
+- Live path: set `TIGERDATA_SERVICE_URL=postgres://...`; UNVERIFIED here (no service).
+# Gemini: nutrition and meal assistance (Care) ✅
+- `src/integrations/gemini.ts`: `PantryVisionProvider` + real `GeminiVisionAdapter`
+  (`generateContent`, `x-goog-api-key`, `inline_data` image, JSON output; plain fetch) +
+  `SandboxPantryVisionAdapter` (fixed sample fridge, honestly labeled). Status `gemini`
+  in `/api/status`.
+- `src/agents/care/pantryPolicy.ts` (PURE): schema, food-name sanitizer, instruction-text
+  rejection, confidence gating (>= 0.75 pre-confirmed, < 0.25 dropped, rest uncertain).
+- `src/agents/care/mealPlanner.ts` (PURE): 11 recipes; allergies/vegetarian hard filters;
+  low sodium, soft foods, dislikes, prep time; missing items mapped to the catalog.
+- `src/agents/care/pantryTools.ts`: `scanPantryPhoto` (opaque single-use `imageId`, so no
+  base64 in tool records and the chat model cannot forge a scan), `getPantryScan`,
+  `confirmPantryItems`, `planDinnerFromPantry` (refuses while items are uncertain; drafts a
+  grocery list, never orders), `updateFoodPreferences`. All audited (`pantry.*`).
+- UI: `/care/pantry` (photo, confirm, plan, shopping list) linked from the Care header.
+  API: `/api/care/pantry`.
+- Demo `npm run demo:pantry [-- photo.jpg]`. Tests `tests/pantryNutrition.test.ts` (17).
+- Live Gemini path UNVERIFIED here (no `GEMINI_API_KEY`); request shape is unit-tested
+  against the documented wire format with a mocked fetch.

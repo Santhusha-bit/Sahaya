@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   let body: {
-    action?: "correct" | "forget" | "syncAnalytics";
+    action?: "correct" | "forget" | "correctContext" | "forgetContext" | "syncAnalytics";
     recordId?: string;
+    fact?: string;
     description?: string;
     value?: number;
     unit?: "hours" | "minutes";
@@ -41,6 +42,18 @@ export async function POST(req: Request) {
   if (body.action === "forget") {
     if (!body.recordId) return NextResponse.json({ error: "recordId required" }, { status: 400 });
     const { record } = await service.runTool("wellness", "forgetRememberedObservation", { recordId: body.recordId });
+    return NextResponse.json({ ok: record.status === "success", record });
+  }
+
+  if (body.action === "correctContext") {
+    if (!body.recordId || !body.fact) return NextResponse.json({ error: "recordId and fact required" }, { status: 400 });
+    const { record } = await service.runTool("wellness", "correctRememberedContext", { recordId: body.recordId, fact: body.fact });
+    return NextResponse.json({ ok: record.status === "success", record });
+  }
+
+  if (body.action === "forgetContext") {
+    if (!body.recordId) return NextResponse.json({ error: "recordId required" }, { status: 400 });
+    const { record } = await service.runTool("wellness", "forgetRememberedContext", { recordId: body.recordId });
     return NextResponse.json({ ok: record.status === "success", record });
   }
 

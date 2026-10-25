@@ -16,7 +16,7 @@ import sys
 
 from uagents import Context
 
-from kinline_agents import REQUESTERS, ExecLog, address_of, make_agent
+from sahaya_agents import REQUESTERS, ExecLog, address_of, make_agent
 from messages import AssistanceRequest, AssistanceResponse, LogsResponse
 
 NAME = sys.argv[1] if len(sys.argv) > 1 else "wellness"

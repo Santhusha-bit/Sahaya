@@ -23,7 +23,6 @@ const LOGO_FILES: Record<string, true> = {
 // Original monogram badges for brands without a public SVG mark.
 const MONOGRAMS: Record<string, Mono> = {
   cartesia: { letter: "C", bg: "#6d28d9", fg: "#ffffff" },
-  twilio: { letter: "T", bg: "#f22f46", fg: "#ffffff" },
   fetchai: { letter: "F", bg: "#111b3a", fg: "#ffffff" },
   armadin: { letter: "A", bg: "#334155", fg: "#ffffff" },
   moss: { letter: "M", bg: "#2e7d32", fg: "#ffffff" },

@@ -82,8 +82,8 @@ Guardian can also forward to the standalone Guardian service instead of the app:
 - **Minimum data.** Only `need`, `urgency` and a consent reference cross; never a
   conversation. The bus persists only the schema-validated payload.
 - **Idempotent.** A re-delivered `request_id` gets the original answer, not a second task.
-- **Intake auth.** Set `KINLINE_BRIDGE_TOKEN` on both sides to require the
-  `x-kinline-bridge-token` header; without it the app endpoint refuses to run in production.
+- **Intake auth.** Set `SAHAYA_BRIDGE_TOKEN` on both sides to require the
+  `x-sahaya-bridge-token` header; without it the app endpoint refuses to run in production.
 - **Honest labeling.** No uAgent URL configured: the identical exchange runs
   in-process and is labeled sandbox, never "Fetch.ai". A configured bridge that is
   down is reported as a rejection, not silently swapped for the sandbox.
@@ -96,9 +96,9 @@ stdout, to `services/uagents/logs/<agent>.jsonl`, and at `GET http://127.0.0.1:<
 
 ## Network modes
 
-`KINLINE_UAGENTS_NETWORK=local` (default) resolves peers from a local table and
+`SAHAYA_UAGENTS_NETWORK=local` (default) resolves peers from a local table and
 skips Almanac registration, so the demo needs no internet, wallet or Agentverse
-account. `KINLINE_UAGENTS_NETWORK=almanac` uses standard uAgents registration and
+account. `SAHAYA_UAGENTS_NETWORK=almanac` uses standard uAgents registration and
 global resolution (set `AGENTVERSE_MAILBOX=1` for an Agentverse mailbox); that mode
 needs network access and is not exercised by the tests. Demo seeds are
 deterministic; override with `UAGENT_SEED_<AGENT>` beyond a local demo.

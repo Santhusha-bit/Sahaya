@@ -68,7 +68,7 @@ const py = spawn(PYTHON, ["-u", "bridge.py", "wellness"], {
     UAGENT_PORT_GUARDIAN: String(GUARDIAN_PORT),
     PYTHONIOENCODING: "utf-8",
     // The whole uAgents tree exits if this demo dies (stdin EOF), so no orphans hold ports.
-    KINLINE_EXIT_WITH_PARENT: "1",
+    SAHAYA_EXIT_WITH_PARENT: "1",
   },
   stdio: ["pipe", "pipe", "pipe"],
 });

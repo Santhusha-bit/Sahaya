@@ -25,7 +25,7 @@ async function main() {
   await wellness.initialize();
 
   line("═");
-  console.log(`KINLINE — Snowflake household analytics (mode: ${status.mode})`);
+  console.log(`Sahaya — Snowflake household analytics (mode: ${status.mode})`);
   console.log(status.detail);
   line("═");
 

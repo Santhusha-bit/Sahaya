@@ -26,7 +26,7 @@ async function main() {
   const USER = "demo-margaret";
 
   line("═");
-  console.log(`KINLINE — Agent-to-agent messaging demo`);
+  console.log(`Sahaya — Agent-to-agent messaging demo`);
   console.log(`Fetch.ai: ${fetchaiStatus().mode} — ${fetchaiStatus().detail}`);
   line("═");
 

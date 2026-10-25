@@ -1,0 +1,24 @@
+GOLDEN STATE HEALTH PLAN
+EXPLANATION OF BENEFITS - THIS IS NOT A BILL
+Member services: (555) 010-7788
+
+Member: Margaret Chen
+Member ID: GSH-XXXXX-2093
+Claim number: GSH-26-0814-55210
+Provider: Bayview Community Hospital
+Date processed: 09/12/2026
+
+DATE        CODE   DESCRIPTION                         BILLED   ALLOWED  PLAN PAID  YOU OWE  REMARK
+08/14/2026  99214  Office visit, established patient  $285.00  $182.00    $145.60   $36.40
+08/14/2026  80053  Comprehensive metabolic panel      $148.00   $42.00     $33.60    $8.40
+08/14/2026  80053  Comprehensive metabolic panel      $148.00    $0.00      $0.00    $0.00  D17
+08/14/2026  85025  Complete blood count w/ diff        $62.00   $21.00     $16.80    $4.20
+08/14/2026  36415  Routine venipuncture                $28.00   $10.00      $8.00    $2.00
+08/14/2026  93000  Electrocardiogram, complete        $175.00   $65.00     $52.00   $13.00
+
+TOTALS                                                $846.00  $320.00    $256.00   $64.00
+
+REMARK CODES
+D17  Duplicate of a service already processed on this claim. The member is not responsible for this charge.
+
+Your total responsibility for this claim: $64.00

@@ -95,8 +95,8 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/assistance") {
       // Intake for the Guardian uAgent (GUARDIAN_AGENT_URL=http://localhost:8030).
-      const token = process.env.KINLINE_BRIDGE_TOKEN?.trim();
-      if (token && req.headers["x-kinline-bridge-token"] !== token) {
+      const token = process.env.SAHAYA_BRIDGE_TOKEN?.trim();
+      if (token && req.headers["x-sahaya-bridge-token"] !== token) {
         return send(res, 401, { status: "rejected", reason: "bad_bridge_token" });
       }
       return send(res, 200, await acceptAssistanceAtGuardian(data, await readBody(req)));

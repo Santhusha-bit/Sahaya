@@ -1,9 +1,12 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
+import type { AgentId } from "../base/types";
+import { AGENT_CAPABILITIES } from "../base/workItemPolicy";
+import { getHouseholdCoordinator } from "@/integrations/jira";
 import { getIncidentIndex } from "@/integrations/search";
-import { sendSms, twilioSmsConfigured } from "@/integrations/twilio";
 import { detectSignals } from "./scamSignals";
 import { runScamScreening } from "./scamWorkflow";
+import { isoDate, sharedTactics, summarizeIncidentMatches } from "./incidentSummary";
 
 export const guardianTools: AgentTool[] = [
   {
@@ -73,34 +76,51 @@ export const guardianTools: AgentTool[] = [
   {
     name: "searchPastIncidents",
     description:
-      "Search the person's own past scam incidents to answer 'has someone tried this before?'. Returns matching incidents with ids, dates, and evidence snippets. Only the person's own incidents are searched. Summarize similarities without claiming it is the same caller.",
+      "Search the person's own past scam incidents to answer 'has someone tried this before?'. Pass the suspicious message (or a description of it) as the query. Returns matching incidents with ids, dates, evidence snippets, and shared tactics, plus a summary that explains the similarities. Only the person's own incidents are searched. Never claim it is the same caller.",
     inputSchema: z.object({
-      query: z.string().min(1).describe("What to look for, e.g. 'gift card grandson' or the suspicious message."),
+      query: z.string().min(1).describe("The suspicious message itself, or what to look for, e.g. 'gift card grandson'."),
       channel: z.enum(["phone", "text", "email", "in_person", "other"]).optional(),
       scamType: z.string().optional().describe("Filter by scam type, e.g. 'gift_card', 'fake_bank'."),
+      excludeIncidentId: z.string().optional().describe("The incident being asked about (e.g. one just screened), so it does not match itself."),
       limit: z.number().int().min(1).max(10).optional(),
     }),
     async execute(input, ctx) {
+      // Tactic signals in the question rank incidents that used the same playbook.
+      const signals = detectSignals(input.query).signals.map((s) => s.code);
       const hits = await getIncidentIndex().search({
         query: input.query,
         userId: ctx.userId,
         filters: { channel: input.channel, scamType: input.scamType },
+        signals,
+        excludeIncidentIds: input.excludeIncidentId ? [input.excludeIncidentId] : undefined,
         limit: input.limit ?? 5,
       });
-      if (!hits.length) {
-        return { ok: true, summary: "I couldn't find a similar past incident in your history.", data: { hits: [] } };
-      }
-      const top = hits[0];
-      const when = new Date(top.doc.receivedAt).toISOString().slice(0, 10);
-      const lines = hits.map((h) => {
-        const d = new Date(h.doc.receivedAt).toISOString().slice(0, 10);
-        return `• ${d} [${h.doc.incidentId}] (${h.doc.scamType}, ${h.doc.riskLevel}): ${h.snippet}`;
+      const summary = await summarizeIncidentMatches({ question: input.query, hits });
+      await ctx.audit.record({
+        actor: "guardian",
+        action: "incident.search",
+        correlationId: ctx.correlationId,
+        detail: { hits: hits.length, top: hits[0]?.doc.incidentId, summarizedBy: summary.by, rejected: summary.rejected },
       });
       return {
         ok: true,
-        summary: `Yes — the closest match is ${top.doc.scamType} from ${when} (incident ${top.doc.incidentId}). This looks similar in tactic, though it may not be the same caller.\n${lines.join("\n")}`,
+        summary: summary.text,
         data: {
-          hits: hits.map((h) => ({ incidentId: h.doc.incidentId, scamType: h.doc.scamType, riskLevel: h.doc.riskLevel, receivedAt: h.doc.receivedAt, score: h.score, snippet: h.snippet })),
+          summarizedBy: summary.by,
+          citedIncidentIds: summary.citedIncidentIds,
+          hits: hits.map((h) => ({
+            incidentId: h.doc.incidentId,
+            scamType: h.doc.scamType,
+            riskLevel: h.doc.riskLevel,
+            channel: h.doc.channel,
+            outcome: h.doc.outcome,
+            receivedAt: h.doc.receivedAt,
+            date: isoDate(h.doc.receivedAt),
+            score: h.score,
+            snippet: h.snippet,
+            matchedTerms: h.matchedTerms,
+            sharedTactics: sharedTactics(h),
+          })),
         },
       };
     },
@@ -199,55 +219,27 @@ export const guardianTools: AgentTool[] = [
       const match = contacts.find(
         (c) => String(c.data.name ?? "").toLowerCase() === input.contactName.toLowerCase(),
       );
-      const phone = match?.data.phone ? String(match.data.phone) : undefined;
-
-      // Deliver via Twilio SMS when the contact has a phone number. Honest
-      // live/sandbox: sendSms() only reports backend "twilio" with sent=true when a
-      // real Twilio send succeeded, otherwise "sandbox" (nothing left the device).
-      // We record whatever actually happened and never claim an SMS we didn't send.
-      let channel: "sms" | "in_app" = "in_app";
-      let delivered = true;
-      let smsError: string | undefined;
-      let smsSid: string | undefined;
-      if (phone) {
-        const sms = await sendSms({ to: phone, body: `Kinline Guardian: ${input.message}` });
-        channel = sms.backend === "twilio" && sms.sent ? "sms" : "in_app";
-        delivered = sms.sent || channel === "in_app";
-        smsError = sms.reason;
-        smsSid = sms.sid;
-      }
-
+      // Delivered in-app (the contact's family dashboard inbox); nothing is texted.
       const rec = await ctx.memory.save("notifications", {
         contactName: input.contactName,
         message: input.message,
-        delivered,
-        channel,
-        smsAttempted: !!phone,
-        smsDelivered: channel === "sms",
-        smsSid,
-        ...(smsError ? { smsError } : {}),
+        delivered: true,
+        channel: "in_app",
       });
       await ctx.audit.record({
         actor: "guardian",
         action: "contact.notify",
         correlationId: ctx.correlationId,
-        detail: { to: input.contactName, channel, delivered, smsDelivered: channel === "sms" },
+        detail: { to: input.contactName, channel: "in_app" },
       });
 
-      const deliveryNote =
-        channel === "sms"
-          ? "I texted them."
-          : phone
-            ? twilioSmsConfigured()
-              ? "The text couldn't be sent just now, so I logged the alert in the app for them."
-              : "I logged the alert in the app for them (live SMS isn't configured, so nothing was texted)."
-            : "I logged the alert in the app for them.";
+      const deliveryNote = "I posted the alert to their Sahaya inbox.";
       return {
         ok: true,
         summary: match
           ? `Alerted ${input.contactName}. ${deliveryNote}`
           : `Sent to ${input.contactName} (not in trusted list yet — consider adding them). ${deliveryNote}`,
-        data: { notificationId: rec.id, channel, delivered, smsDelivered: channel === "sms" },
+        data: { notificationId: rec.id, channel: "in_app", delivered: true },
       };
     },
   },
@@ -309,6 +301,45 @@ export const guardianTools: AgentTool[] = [
           requests: filtered.map((a) => ({ id: a.id, need: a.data.need, status: a.data.status })),
           helpers: helpers.map((h) => ({ helper: h.data.helper, when: h.data.when, status: h.data.status })),
         },
+      };
+    },
+  },
+  {
+    name: "delegateToAgent",
+    description:
+      "Hand a sensitive action that another agent owns (e.g. Finance paying an invoice, freezing a card, or filing a dispute) to that agent as a reviewable work item. It does NOT execute anything: a registered family reviewer must approve first, and the assigned agent can only run exactly what was approved. Code policy decides whether the delegation is allowed.",
+    inputSchema: z.object({
+      assignedAgent: z.enum(["finance", "care"]),
+      toolName: z.enum(["executePayment", "freezeCard", "fileBillingDispute"]),
+      requestedAction: z.string().min(1).max(240).describe("One line a family reviewer will read."),
+      input: z.record(z.unknown()).describe("Exact parameters to approve, e.g. { amount, payee, invoiceId }."),
+    }),
+    async execute(input, ctx) {
+      const { service, backend } = getHouseholdCoordinator(ctx.userId);
+      const scope = AGENT_CAPABILITIES[input.assignedAgent as AgentId]?.find((c) => c.toolName === input.toolName)?.scope ?? "unknown";
+      const item = await service.propose({
+        userId: ctx.userId,
+        requestedAction: input.requestedAction,
+        toolName: input.toolName,
+        requestingAgent: ctx.agentId,
+        assignedAgent: input.assignedAgent as AgentId,
+        permissionScope: scope,
+        input: input.input,
+      });
+      await ctx.audit.record({
+        actor: ctx.agentId,
+        action: item.status === "rejected" ? "work_item.delegation_denied" : "work_item.delegation_proposed",
+        correlationId: ctx.correlationId,
+        detail: { workItemId: item.id, assignedAgent: input.assignedAgent, toolName: input.toolName },
+      });
+      if (item.status === "rejected") {
+        const reason = item.history.find((e) => e.action === "delegation_denied")?.detail;
+        return { ok: false, summary: `That hand-off isn't allowed: ${reason}`, error: "delegation_denied", data: { workItemId: item.id } };
+      }
+      return {
+        ok: true,
+        summary: `I've asked ${input.assignedAgent} to handle this, pending approval from ${item.requiredApprovals} family caregiver(s)${backend === "jira" ? ` (Jira ${item.externalKey ?? "sync pending"})` : ""}. Nothing happens until they approve.`,
+        data: { workItemId: item.id, status: item.status, riskTier: item.riskTier, requiredApprovals: item.requiredApprovals, externalKey: item.externalKey, reviewBackend: backend },
       };
     },
   },

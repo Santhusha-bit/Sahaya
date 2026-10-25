@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AgentEvent } from "@/agents/base/types";
 import { AgentNetworkLog } from "@/components/AgentNetworkLog";
@@ -36,6 +37,10 @@ export default function ActivityPage() {
       <p className="mt-1.5 text-[15px] leading-relaxed text-[var(--muted)]">
         Every cross-agent request, and whether it was authorized. This is the audit trail of agent collaboration.
       </p>
+      <Link href="/approvals" className="card card-interactive mt-4 flex items-center justify-between p-4 text-[14px] font-semibold">
+        <span>Approvals: sensitive hand-offs waiting on family review</span>
+        <span className="text-[var(--faint)]">→</span>
+      </Link>
 
       <AgentNetworkLog />
 

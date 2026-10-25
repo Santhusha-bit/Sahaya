@@ -220,12 +220,12 @@ describe("agent-to-agent bridge (Track 5)", () => {
     });
 
     it("enforces the bridge token when one is configured", async () => {
-      process.env.KINLINE_BRIDGE_TOKEN = "s3cret";
+      process.env.SAHAYA_BRIDGE_TOKEN = "s3cret";
       try {
-        expect((await post(validRequest(), { "x-kinline-bridge-token": "wrong" })).status).toBe(401);
-        expect((await post(validRequest({ request_id: "req-tok" }), { "x-kinline-bridge-token": "s3cret" })).status).toBe(200);
+        expect((await post(validRequest(), { "x-sahaya-bridge-token": "wrong" })).status).toBe(401);
+        expect((await post(validRequest({ request_id: "req-tok" }), { "x-sahaya-bridge-token": "s3cret" })).status).toBe(200);
       } finally {
-        delete process.env.KINLINE_BRIDGE_TOKEN;
+        delete process.env.SAHAYA_BRIDGE_TOKEN;
       }
     });
 

@@ -57,7 +57,7 @@ public/
 Technology statuses were derived from the actual repository
 (`src/integrations/`, `.env.example`, `package.json`):
 
-- **Used in Sahaya**: Cartesia, Twilio, Convex, Moss, Backboard, Fetch.ai,
+- **Used in Sahaya**: Cartesia, Convex, Moss, Backboard, Fetch.ai,
   Bitdeer AI, Tiger Data, Snowflake, Elasticsearch, Jira, Claude (Anthropic),
   Auth0, Next.js.
 - **Planned integration**: Armadin, Apify, Creao AI.

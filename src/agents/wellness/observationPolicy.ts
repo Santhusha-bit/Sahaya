@@ -46,7 +46,7 @@ export interface PolicyResult {
 }
 
 /** Clinical diagnosis vocabulary Wellness must never assert as an observation. */
-const DIAGNOSIS_TERMS = [
+export const DIAGNOSIS_TERMS = [
   "diagnos", "disorder", "clinical depression", "major depression", "dementia",
   "alzheimer", "syndrome", "hypertension", "diabetes", "insomnia disorder",
   "sleep apnea", "bipolar", "psychosis", "patholog",
@@ -58,7 +58,7 @@ const DIAGNOSIS_TERMS = [
  * system or asks to move data. If a candidate's content reads like an
  * instruction, it is not an observation — reject it regardless of grounding.
  */
-const INJECTION_TERMS = [
+export const INJECTION_TERMS = [
   "ignore previous", "ignore all previous", "ignore the above", "disregard previous",
   "disregard all", "previous instructions", "new instructions", "system prompt",
   "you are now", "override", "developer mode",
@@ -69,7 +69,7 @@ const INJECTION_TERMS = [
 ];
 
 /** Medication-change vocabulary Wellness must never produce. */
-const MEDICATION_TERMS = [
+export const MEDICATION_TERMS = [
   "medication", "medicine", "dose", "dosage", "prescrib", "pill", "tablet",
   "mg ", "milligram", "stop taking", "increase your", "double your", "skip your",
 ];
@@ -104,12 +104,37 @@ function numbersInText(text: string): Set<number> {
   return out;
 }
 
-/** Find the source sentence that best supports any of the given needles. */
+/**
+ * Find the source sentence that supports the observation. Needles are tried in
+ * priority order (most specific first, e.g. the stated number before the word
+ * "sleep") and matched on word boundaries, so evidence points at the sentence
+ * that actually contains the value rather than the first loosely related one.
+ */
 function supportingSentence(source: string, needles: string | string[]): string {
   const list = (Array.isArray(needles) ? needles : [needles]).map((n) => n.toLowerCase()).filter(Boolean);
   const sentences = source.split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
-  const hit = sentences.find((s) => list.some((n) => s.toLowerCase().includes(n)));
-  return (hit ?? sentences[0] ?? source).trim().slice(0, 200);
+  for (const n of list) {
+    const re = new RegExp(`(^|[^a-z0-9])${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`, "i");
+    const hit = sentences.find((s) => re.test(s));
+    if (hit) return hit.trim().slice(0, 200);
+  }
+  return (sentences[0] ?? source).trim().slice(0, 200);
+}
+
+/** The source sentence sharing the most tokens with a qualitative description. */
+function bestOverlapSentence(source: string, tokens: string[]): string {
+  const sentences = source.split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
+  let best = sentences[0] ?? source;
+  let bestScore = -1;
+  for (const s of sentences) {
+    const low = s.toLowerCase();
+    const score = tokens.filter((t) => low.includes(t)).length;
+    if (score > bestScore) {
+      best = s;
+      bestScore = score;
+    }
+  }
+  return best.trim().slice(0, 200);
 }
 
 /** Spelled form of a small number, for evidence matching ("4" -> "four"). */
@@ -210,11 +235,14 @@ function decideOne(candidate: CandidateObservation, source: string): CandidateDe
         evidence: "",
       };
     }
-    const numNeedles = [String(candidate.value), numberWord(candidate.value) ?? "", candidate.unit, "slept", "sleep"].filter(Boolean) as string[];
+    // Prefer the sentence that states the number itself; "sleep"/"slept" alone
+    // would pick an earlier sentence like "I haven't been sleeping well."
+    const valueNeedles = [String(candidate.value), numberWord(candidate.value) ?? ""].filter(Boolean);
+    const byValue = source.split(/(?<=[.!?])\s+|\n+/).find((s) => valueNeedles.some((n) => new RegExp(`\\b${n.replace(".", "\\.")}\\b`, "i").test(s)));
     return {
       candidate, verdict: candidate.requires_confirmation ? "needs_confirmation" : "accepted",
       layer: "ok", reason: "Grounded numeric observation.",
-      evidence: supportingSentence(source, numNeedles),
+      evidence: byValue ? byValue.trim().slice(0, 200) : supportingSentence(source, [candidate.unit, "slept", "sleep"]),
     };
   }
 
@@ -231,7 +259,7 @@ function decideOne(candidate: CandidateObservation, source: string): CandidateDe
       };
     }
     const strong = overlap.length / descrTokens.length >= 0.5;
-    const evidence = supportingSentence(source, overlap[0]);
+    const evidence = bestOverlapSentence(source, overlap);
     if (!strong || candidate.requires_confirmation) {
       return {
         candidate, verdict: "needs_confirmation", layer: "ok",

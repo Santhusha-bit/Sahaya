@@ -3,6 +3,13 @@ import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/type
 import { synthesizeSpeech } from "@/integrations/cartesia";
 import { carePrompt } from "./carePrompt";
 import { careTools } from "./careTools";
+import {
+  backendLabel,
+  parseRequestedItems,
+  prepareCartFromDiscovery,
+  runGroceryDiscovery,
+  usualGroceries,
+} from "./groceryWorkflow";
 
 const USUAL_KEYS = ["milk", "bread", "eggs", "bananas", "oats", "soup", "yogurt", "cookies"];
 
@@ -35,6 +42,8 @@ export function shoppingIntent(message: string): ShoppingIntent | null {
   }
   return null;
 }
+import { DEFAULT_FOOD_PREFERENCES } from "./pantryTools";
+import { DEFAULT_MANDATE, grantMandate } from "./paidServices/paidServiceWorkflow";
 
 export class CareAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -49,7 +58,11 @@ export class CareAgent extends BaseAgent {
       "I took my morning blood pressure pill",
       "I need my usual groceries delivered tomorrow",
       "Where is my grocery order?",
+      "Buy whole milk, coffee and apples",
+      "Is my usual milk a good price right now?",
       "Suggest a few easy dinners",
+      "What can I make for dinner from my pantry?",
+      "Compare oats for the best value",
     ],
     theme: {
       accent: "#4779b8",
@@ -93,6 +106,11 @@ export class CareAgent extends BaseAgent {
     await this.memory.save("pantry", { item: "bananas" }, { tags: ["pantry"] });
     // A couple of usual-order items live in shared household prefs (Care may write shared).
     await this.memory.writeShared("groceryPreferences", { usual: ["milk", "bread", "eggs", "bananas", "oats"] });
+    // Food preferences the meal planner enforces (allergies are hard filters in code).
+    await this.memory.writeShared("dietPreferences", { ...DEFAULT_FOOD_PREFERENCES });
+    // Previously authorized limit for paid product-data lookups over x402 (test
+    // USDC). Anything above it asks first; changing it requires approval.
+    await grantMandate(this.memory, DEFAULT_MANDATE, "user (onboarding)");
   }
 
   async handleEvent(event: AgentEvent): Promise<AgentTask | null> {
@@ -119,6 +137,17 @@ export class CareAgent extends BaseAgent {
 
   protected async sandboxPlan(message: string, ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
+    if (/paid (data|service|lookup)|spending limit|x402/.test(m)) {
+      return { reply: "Here's your paid-service limit and spending.", toolCalls: [{ name: "getPaidServiceSpending", input: {} }] };
+    }
+    if (/\bcompare\b|best value|cheapest|healthiest|lowest.sodium/.test(m)) {
+      const query = m.match(/\b(oats?|oatmeal|soups?|yogh?urt|milk|bread)\b/)?.[1] ?? m.replace(/.*compare\s+/, "").split(/\s+for\b|[?.!]/)[0].trim();
+      const tier = /detail|nutrition|healthiest|sodium|sugar|protein/.test(m) ? "detailed" : "basic";
+      return {
+        reply: "I'll get a product comparison from the paid product-data service.",
+        toolCalls: [{ name: "compareProducts", input: { query: query || "oats", tier } }],
+      };
+    }
     if (/medication|medicine|pill|dose|due/.test(m) && !/took|taken|skipped/.test(m)) {
       return { reply: "Here's your medication schedule.", toolCalls: [{ name: "getMedicationSchedule", input: { when: "today" } }] };
     }
@@ -127,6 +156,50 @@ export class CareAgent extends BaseAgent {
       return {
         reply: "Great, logging that now.",
         toolCalls: [{ name: "recordMedicationConfirmation", input: { medicationName: name, taken: true } }],
+      };
+    }
+    if (/price|compare|cheap|good deal|how much|cost/.test(m)) {
+      const item = ["milk", "eggs", "oats", "bread", "bananas", "chicken", "rice", "soup", "yogurt", "apples"].find((k) => m.includes(k.replace(/s$/, ""))) ?? "milk";
+      return { reply: `Let me check current prices for ${item}.`, toolCalls: [{ name: "comparePrices", input: { query: item } }] };
+    }
+    if (/add (it|that|this|the (recommended|cheaper|best)( one)?)|draft cart|put (it|that) in/.test(m)) {
+      return { reply: "Adding that to your draft cart.", toolCalls: [{ name: "addToDraftCart", input: { choice: "recommended" } }] };
+    }
+    if (/pantry|fridge|refrigerator|photo|what (?:can|should) i (?:make|cook)/.test(m)) {
+      // Pantry-photo flow (checked before shopping so "yes, I have those" is a
+      // pantry confirmation, never mistaken for a spoken purchase approval): confirm the uncertain items first, then plan from what is confirmed.
+      if (/\b(yes|yep|confirm|have (?:them|those|all|it))\b/.test(m) && !/\b(no|not|don'?t)\b/.test(m)) {
+        return {
+          reply: "Thanks for checking.",
+          toolCalls: [
+            { name: "confirmPantryItems", input: { confirmAllUncertain: true } },
+            { name: "planDinnerFromPantry", input: {} },
+          ],
+        };
+      }
+      return { reply: "Let me look at what you have.", toolCalls: [{ name: "planDinnerFromPantry", input: {} }] };
+    }
+    // An explicit list ("buy milk and eggs") gets live Apify discovery; "my usual
+    // groceries" uses the history-based cart below.
+    const explicitList = parseRequestedItems(message);
+    if (explicitList) {
+      // Full workflow: preferred items -> Apify product discovery -> compare ->
+      // cart -> REQUEST APPROVAL. Done imperatively so a real pending approval
+      // appears for the user; approving it runs requestOrderApproval, which
+      // places the order and asks Finance to review the payment.
+      const items = explicitList;
+      await ctx.memory.save("groceryLists", { items, status: "draft" }, { tags: ["grocery"] });
+      const { discoveryId, discovery } = await runGroceryDiscovery(ctx, items);
+      const cart = await prepareCartFromDiscovery(ctx, discoveryId, { requestApproval: true });
+      const source = backendLabel(discovery);
+      if (!cart.ok) {
+        return { reply: `I searched ${items.length} item(s) using ${source}, but couldn't find current prices to build a cart. Want to try different items?` };
+      }
+      const { plan } = cart;
+      const stores = plan.retailers.length ? ` from ${plan.retailers.slice(0, 3).join(", ")}${plan.retailers.length > 3 ? " and others" : ""}` : "";
+      const missing = plan.missing.length ? ` I couldn't find a price for ${plan.missing.map((x) => x.query).join(", ")}.` : "";
+      return {
+        reply: `I checked fresh prices for your list using ${source}. Your cart is ${plan.lines.length} item(s) for $${plan.total.toFixed(2)}${stores}.${missing} Please review it and approve when you're ready (see the card above).`,
       };
     }
     const shopping = shoppingIntent(message);

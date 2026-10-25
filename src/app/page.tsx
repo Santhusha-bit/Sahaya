@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { agentMeta, AGENT_IDS } from "@/agents/registry";
 import { getCurrentUser } from "@/lib/user";
-import { getDataLayer } from "@/agents/base/dataLayer";
 import { AGENT_ICONS, MicIcon, ShieldCheckIcon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +15,6 @@ function greeting(): string {
 export default function HomePage() {
   const meta = agentMeta();
   const user = getCurrentUser();
-  const backend = getDataLayer().backend;
   const firstName = user.name.split(" ")[0];
 
   return (
@@ -69,6 +67,13 @@ export default function HomePage() {
             </span>
           </Link>
           <p className="mt-3 text-[13px] font-medium text-[var(--muted)]">Tap to speak</p>
+          <Link
+            href="/call"
+            className="btn pill mt-4 px-4 py-2 text-[14px] font-semibold"
+            style={{ background: "var(--brand-soft)", color: "var(--brand-ink)" }}
+          >
+            Start a protected call
+          </Link>
         </div>
 
         <Link
@@ -78,15 +83,19 @@ export default function HomePage() {
         >
           🛒 Order my groceries
         </Link>
+        <Link
+          href="/money"
+          className="btn card card-interactive mt-3 flex min-h-14 items-center justify-center gap-2 px-4 text-[17px] font-bold"
+          style={{ color: "#3b449c" }}
+        >
+          🏦 Review my spending
+        </Link>
       </section>
 
       {/* Agent grid (2x2) */}
       <section className="mt-9">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3">
           <h2 className="eyebrow">Your companions</h2>
-          <Link href="/agents" className="text-[13px] font-semibold text-[var(--brand)]">
-            See all
-          </Link>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {AGENT_IDS.map((id, i) => {
@@ -112,11 +121,6 @@ export default function HomePage() {
           })}
         </div>
       </section>
-
-      <div className="mt-8 flex items-center justify-center gap-2 text-[12px] text-[var(--faint)]">
-        <span className="live-dot" style={{ background: backend === "convex" ? "#22c55e" : "#e8b86d" }} />
-        {backend === "convex" ? "Convex · live backend" : "Sandbox · in-process"} · agents run independently
-      </div>
     </main>
   );
 }

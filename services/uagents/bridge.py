@@ -1,4 +1,4 @@
-"""Launch the four Kinline uAgents, each as its own OS process.
+"""Launch the four Sahaya uAgents, each as its own OS process.
 
     python bridge.py            # guardian + wellness + care + finance
     python bridge.py wellness   # guardian + wellness only
@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 
-from kinline_agents import REQUESTERS, address_of, exit_with_parent, port_of
+from sahaya_agents import REQUESTERS, address_of, exit_with_parent, port_of
 
 HERE = Path(__file__).resolve().parent
 COLORS = {"guardian": "\033[94m", "wellness": "\033[93m", "care": "\033[92m", "finance": "\033[95m"}
@@ -42,7 +42,7 @@ def main() -> None:
         print(f"starting {name:>8} on :{port_of(name)}  {address_of(name)}")
         proc = subprocess.Popen([sys.executable, "-u", *args], cwd=HERE, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                                errors="replace", env={**os.environ, "KINLINE_EXIT_WITH_PARENT": "1"})
+                                errors="replace", env={**os.environ, "SAHAYA_EXIT_WITH_PARENT": "1"})
         procs.append(proc)
         threading.Thread(target=pump, args=(name, proc), daemon=True).start()
     try:
