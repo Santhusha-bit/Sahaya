@@ -251,6 +251,18 @@ export function apifyGroceryStatus(): IntegrationStatus {
   };
 }
 
+export function brightDataStatus(): IntegrationStatus {
+  const live = has("BRIGHTDATA_API_TOKEN") && has("BRIGHTDATA_SERP_ZONE");
+  return {
+    key: "brightdata",
+    label: "Bright Data (public price verification)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? "Live: Care cross-checks a product against current public Google Shopping listings via the Bright Data SERP API. Results are validated and normalized in code."
+      : "Sandbox: labeled sample listings with the same interface exercise validation, unit-price comparison and freshness. Not live prices.",
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -271,6 +283,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     apifyStatus(),
     apifyGroceryStatus(),
     checkoutStatus(),
+    brightDataStatus(),
   ];
 }
 

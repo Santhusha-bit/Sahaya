@@ -10,3 +10,4 @@ delete process.env.MOSS_API_KEY;
 // Grocery discovery: offline fixture catalog, never the network or Apify.
 delete process.env.APIFY_TOKEN;
 process.env.GROCERY_DISCOVERY_MODE = "sandbox";
+delete process.env.BRIGHTDATA_API_TOKEN;
