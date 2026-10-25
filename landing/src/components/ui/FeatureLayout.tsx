@@ -113,7 +113,7 @@ export function FeatureLayout({
 
         {note && (
           <Reveal>
-            <p className="mx-auto mt-10 max-w-3xl rounded-2xl border border-line bg-white/60 px-5 py-4 text-center text-sm text-muted">
+            <p className="mx-auto mt-10 max-w-3xl rounded-2xl border border-line bg-white px-5 py-4 text-center text-sm text-muted">
               {note}
             </p>
           </Reveal>
