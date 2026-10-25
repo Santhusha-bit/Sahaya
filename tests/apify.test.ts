@@ -144,7 +144,7 @@ describe("Grocery Product Discovery Actor core", () => {
   });
 });
 
-describe("Kinline Apify client", () => {
+describe("Sahaya Apify client", () => {
   it("runs the Actor on Apify, polls to completion, reads the dataset and validates every offer", async () => {
     const requests: { method: string; url: string; auth: string | null; body?: string }[] = [];
     const good = offer({ query: "eggs", offerId: "a" });
@@ -163,10 +163,10 @@ describe("Kinline Apify client", () => {
       if (u.includes("/records/OUTPUT")) return json({ warnings: ["eggs: partial"] });
       return json({}, 404);
     };
-    const client = new ApifyGroceryDiscovery("tok_secret", "kinline/grocery-product-discovery", { fetch: fakeFetch as any });
+    const client = new ApifyGroceryDiscovery("tok_secret", "sahaya/grocery-product-discovery", { fetch: fakeFetch as any });
     const d = await client.discover({ shoppingList: ["2 x eggs"] });
 
-    expect(requests[0].url).toContain("/v2/acts/kinline~grocery-product-discovery/runs?waitForFinish=60");
+    expect(requests[0].url).toContain("/v2/acts/sahaya~grocery-product-discovery/runs?waitForFinish=60");
     expect(JSON.parse(requests[0].body!)).toMatchObject({ shoppingList: ["2 x eggs"] });
     expect(requests.every((r) => r.auth === "Bearer tok_secret")).toBe(true);
     expect(requests.some((r) => r.url.includes("tok_secret"))).toBe(false); // token never in a URL

@@ -22,12 +22,12 @@ import os
 import aiohttp
 from uagents import Context
 
-from kinline_agents import REQUESTERS, ExecLog, address_of, make_agent
+from sahaya_agents import REQUESTERS, ExecLog, address_of, make_agent
 from messages import AssistanceRequest, AssistanceResponse, LogsResponse
 
 NAME = "guardian"
 GUARDIAN_AGENT_URL = os.environ.get("GUARDIAN_AGENT_URL", "http://127.0.0.1:3000/api/bridge/guardian").rstrip("/")
-BRIDGE_TOKEN = os.environ.get("KINLINE_BRIDGE_TOKEN", "")
+BRIDGE_TOKEN = os.environ.get("SAHAYA_BRIDGE_TOKEN", "")
 URGENCIES = {"routine", "soon", "urgent"}
 
 agent = make_agent(NAME)
@@ -49,7 +49,7 @@ def reject(msg: AssistanceRequest, reason: str) -> AssistanceResponse:
 async def coordinate(ctx: Context, msg: AssistanceRequest) -> AssistanceResponse:
     headers = {"Content-Type": "application/json"}
     if BRIDGE_TOKEN:
-        headers["x-kinline-bridge-token"] = BRIDGE_TOKEN
+        headers["x-sahaya-bridge-token"] = BRIDGE_TOKEN
     payload = msg.dict() if hasattr(msg, "dict") else msg.model_dump()
     try:
         timeout = aiohttp.ClientTimeout(total=15)

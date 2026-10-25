@@ -28,7 +28,7 @@ async function main() {
   const photoPath = process.argv[2];
 
   line("═");
-  console.log(`KINLINE: Care pantry photo -> dinner (Gemini vision: ${status.mode})`);
+  console.log(`SAHAYA: Care pantry photo -> dinner (Gemini vision: ${status.mode})`);
   console.log(status.detail);
   console.log(`Provider: ${provider.name}  |  Model: ${provider.model}`);
   line("═");

@@ -19,7 +19,7 @@ import type { CreditFinding, CreditInterpretation } from "./creditInterpret";
 export interface NextStep {
   id: string;
   text: string;
-  /** A Kinline tool that can help; any such action still needs the person's approval. */
+  /** A Sahaya tool that can help; any such action still needs the person's approval. */
   tool?: "prepareDispute" | "requestAssistanceCoordination";
 }
 
@@ -36,7 +36,7 @@ const FORBIDDEN: Array<[RegExp, string]> = [
   [/\b(confirm(s|ed)?|proves?|definitely)\b[^.]{0,40}\b(fraud|identity theft|stolen)/i, "claims fraud is confirmed"],
   [/you (are|have been) (a victim|defrauded|scammed)/i, "claims the person is a victim"],
   [/\bguarantee/i, "makes a guarantee"],
-  [/\b(we|kinline|finance) (is|are|will be|am) (continuously |now )?monitoring\b/i, "claims ongoing monitoring"],
+  [/\b(we|sahaya|finance) (is|are|will be|am) (continuously |now )?monitoring\b/i, "claims ongoing monitoring"],
   [/\b\d{3}-?\d{2}-?\d{4}\b/, "contains an SSN-like number"],
 ];
 
@@ -97,7 +97,7 @@ export function templateExplanation(interp: CreditInterpretation): string {
   return [lead, ...lines].join("\n");
 }
 
-const SYSTEM = `You are Finance inside Kinline, explaining a credit and identity review to an older adult.
+const SYSTEM = `You are Finance inside Sahaya, explaining a credit and identity review to an older adult.
 Write 4 to 7 short, calm sentences in plain language (no jargon, no markdown, no lists).
 Rules:
 - Use ONLY the findings provided. After each claim, cite the finding id in square brackets, e.g. [inquiry-burst]. Cite every high-severity finding.

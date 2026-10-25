@@ -28,7 +28,7 @@ async function main() {
   await care.initialize();
 
   line("═");
-  console.log("KINLINE: accessible voice shopping demo (Visa track)");
+  console.log("SAHAYA: accessible voice shopping demo (Visa track)");
   console.log(`Apify:    ${apifyStatus().mode}. ${apifyStatus().detail}`);
   console.log(`Checkout: ${checkoutStatus().mode}. ${checkoutStatus().detail}`);
   line("═");

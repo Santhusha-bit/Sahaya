@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     return new NextResponse(JSON.stringify(packet, null, 2), {
       headers: {
         "Content-Type": "application/json",
-        "Content-Disposition": `attachment; filename="kinline-case-${packet.caseId}.json"`,
+        "Content-Disposition": `attachment; filename="sahaya-case-${packet.caseId}.json"`,
       },
     });
   }

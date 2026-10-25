@@ -9,12 +9,12 @@ import type { DroidSession } from "@factory/droid-sdk/node";
  * Factory Droid SDK integration: runs a bounded investigation as a separate
  * Droid execution agent from inside the running product.
  *
- * Scoping is enforced by Kinline, not requested of the model:
+ * Scoping is enforced by Sahaya, not requested of the model:
  *  - The Droid runs in an empty, throwaway working directory.
  *  - Every built-in Droid tool (shell, file read/write, web, ...) is disabled.
  *    The ids come from the CLI itself (a probe session's listTools()), so a new
  *    built-in tool is disabled too.
- *  - The only tools left are Kinline's in-process MCP tools (all read-only).
+ *  - The only tools left are Sahaya's in-process MCP tools (all read-only).
  *  - A permission handler approves only those tools; anything else is cancelled
  *    and recorded.
  *  - Documents are attached to the prompt; the Droid has no other data access.
@@ -93,7 +93,7 @@ export function resolveDroidExecPath(): string {
   return "droid";
 }
 
-const PROBE_KEY = "__kinline_droid_builtin_tools__";
+const PROBE_KEY = "__sahaya_droid_builtin_tools__";
 
 /** Built-in Droid tool ids, discovered once per process from the CLI. */
 async function builtinToolIds(base: { apiKey: string; execPath: string; cwd: string }): Promise<string[]> {
@@ -125,7 +125,7 @@ export async function runDroidTask(opts: DroidRunOptions): Promise<DroidRunResul
   const sdk = await import("@factory/droid-sdk/node");
   const apiKey = process.env.FACTORY_API_KEY!.trim();
   const execPath = resolveDroidExecPath();
-  const workspace = await mkdtemp(join(tmpdir(), "kinline-droid-"));
+  const workspace = await mkdtemp(join(tmpdir(), "sahaya-droid-"));
   const base = { apiKey, execPath, cwd: workspace };
   const allowedTools = opts.tools.map((t) => t.name);
   const controller = new AbortController();
@@ -170,7 +170,7 @@ export async function runDroidTask(opts: DroidRunOptions): Promise<DroidRunResul
       ...(has("FACTORY_DROID_MODEL") ? { modelId: process.env.FACTORY_DROID_MODEL!.trim() } : {}),
       abortSignal: controller.signal,
       permissionHandler: ({ toolUses }) => {
-        // Only Kinline's own investigation tools may run. Everything else is refused.
+        // Only Sahaya's own investigation tools may run. Everything else is refused.
         const ok =
           toolUses.length > 0 &&
           toolUses.every((u) => {
@@ -195,7 +195,7 @@ export async function runDroidTask(opts: DroidRunOptions): Promise<DroidRunResul
           emit({ kind: "tool_call", tool: msg.name, input: msg.input });
           break;
         case "tool_result":
-          // Kinline's own tools report from their handlers; this covers anything else.
+          // Sahaya's own tools report from their handlers; this covers anything else.
           if (!allowedTools.some((t) => msg.toolName.endsWith(t))) {
             emit({ kind: "tool_result", tool: msg.toolName, ok: !msg.isError, preview: preview(msg.content) });
           }

@@ -1,4 +1,4 @@
-# Kinline — Guardian Safety Platform Progress
+# Sahaya — Guardian Safety Platform Progress
 
 Status of the five-track build (see MILESTONES.md for the plans). Run commands
 from the repo root.
@@ -161,7 +161,7 @@ and the result plus a tamper-evident trail sync back (Jira when configured).
 
 ### Track 5b: independent uAgents for all four agents ✅ done (verified live)
 - Each agent is now its OWN uAgent in its OWN process (`guardian_agent.py`,
-  `requester_agent.py wellness|care|finance`, shared `kinline_agents.py`); the old
+  `requester_agent.py wellness|care|finance`, shared `sahaya_agents.py`); the old
   single-Bureau bridge is replaced by `bridge.py`, a launcher that spawns them.
   Local peer resolution (no Almanac/internet needed); `almanac` mode available.
 - Guardian's uAgent verifies the signed envelope sender matches the claimed
@@ -264,7 +264,7 @@ scoped memory and approvals — no infrastructure duplicated.
 ## Tiger Data: longitudinal wellness trends ✅
 End-to-end: Wellness extracts a timestamped observation -> Convex saves the
 canonical record -> the sync job mirrors approved numeric observations to Tiger
-Data -> Kinline queries weekly/monthly aggregates -> Wellness compares the current
+Data -> Sahaya queries weekly/monthly aggregates -> Wellness compares the current
 period with the person's own history -> the family dashboard shows the trend with
 evidence and uncertainty.
 - `src/integrations/tigerdata.ts`: real Tiger Data adapter (`pg`, postgres:// service

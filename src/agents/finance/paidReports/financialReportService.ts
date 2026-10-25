@@ -52,7 +52,7 @@ export const REPORT_TITLES: Record<ReportId, string> = {
 };
 
 export const DATA_NOTICE =
-  "Illustrative sample benchmarks for the Kinline demo, not authoritative pricing. Confirm with the provider, insurer, or Medicare before disputing a charge.";
+  "Illustrative sample benchmarks for the Sahaya demo, not authoritative pricing. Confirm with the provider, insurer, or Medicare before disputing a charge.";
 
 const AS_OF = "2026-Q3 (illustrative)";
 
@@ -179,7 +179,7 @@ export function reportRequirements(resource: string, reportId: ReportId): Paymen
   };
 }
 
-const FACILITATOR_KEY = "__kinline_x402_report_facilitator__";
+const FACILITATOR_KEY = "__sahaya_x402_report_facilitator__";
 
 /** The report service's own sandbox verifier: checks signatures, never settles. */
 export function reportFacilitator(): Facilitator {

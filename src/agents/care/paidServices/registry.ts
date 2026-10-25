@@ -31,7 +31,7 @@ export interface PaidDataService {
 }
 
 /** Origin used when Care calls the built-in service in-process. */
-export const IN_PROCESS_ORIGIN = "http://kinline.local";
+export const IN_PROCESS_ORIGIN = "http://sahaya.local";
 
 export const PRODUCT_COMPARE_PATH = "/api/x402/product-compare";
 
@@ -50,7 +50,7 @@ export function productCompareService(): PaidDataService {
   );
   return {
     id: "product-compare",
-    name: "Kinline Product Data (x402 test service)",
+    name: "Sahaya Product Data (x402 test service)",
     category: "product-data",
     resourcePath: PRODUCT_COMPARE_PATH,
     allowedOrigins: [...new Set(origins)],

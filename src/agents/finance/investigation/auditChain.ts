@@ -2,7 +2,7 @@
  * Hash-chained case audit. Each event commits to the previous event's hash, so
  * editing, deleting or reordering any past entry breaks verification from that
  * point on. The chain is exported with the evidence packet so a third party can
- * re-verify it without trusting Kinline.
+ * re-verify it without trusting Sahaya.
  */
 
 import { createHash } from "node:crypto";

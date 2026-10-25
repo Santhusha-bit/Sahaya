@@ -234,7 +234,7 @@ export function createWallet(privateKey: Hex, backend: X402Wallet["backend"]): X
   };
 }
 
-const WALLET_KEY = "__kinline_x402_wallet__";
+const WALLET_KEY = "__sahaya_x402_wallet__";
 
 /** Live testnet wallet when configured, otherwise a process-wide ephemeral key. */
 export function getX402Wallet(): X402Wallet {
@@ -350,7 +350,7 @@ export class LocalVerifierFacilitator implements Facilitator {
   }
 }
 
-const FACILITATOR_KEY = "__kinline_x402_facilitator__";
+const FACILITATOR_KEY = "__sahaya_x402_facilitator__";
 
 export function getFacilitator(): Facilitator {
   const g = globalThis as Record<string, unknown>;

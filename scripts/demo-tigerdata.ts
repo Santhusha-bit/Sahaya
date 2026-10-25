@@ -4,7 +4,7 @@
  * Tiger Data longitudinal wellness trends, end to end:
  *   1. A few weeks of (fictional, labeled) sleep reports exist in Convex, the canonical store.
  *   2. The sync job mirrors the approved numeric observations into Tiger Data.
- *   3. Kinline queries weekly aggregates and compares this week with Margaret's history,
+ *   3. Sahaya queries weekly aggregates and compares this week with Margaret's history,
  *      with evidence and uncertainty.
  *   4. Margaret says something in conversation; Wellness extracts a timestamped
  *      observation, saves it to Convex, the sync job mirrors it, and the trend updates.
@@ -53,7 +53,7 @@ async function main() {
 
   const status = await ts.status();
   line("═");
-  console.log(`KINLINE: Tiger Data longitudinal wellness trends (backend: ${ts.backend}, mode: ${status.mode})`);
+  console.log(`SAHAYA: Tiger Data longitudinal wellness trends (backend: ${ts.backend}, mode: ${status.mode})`);
   console.log(status.detail);
   line("═");
 

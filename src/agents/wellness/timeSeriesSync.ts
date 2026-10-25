@@ -46,7 +46,7 @@ export interface SyncRun {
 }
 
 /**
- * Map an energy description to a 1-5 rating. Kinline only records energy as
+ * Map an energy description to a 1-5 rating. Sahaya only records energy as
  * words ("felt exhausted"), so this is a coarse, DERIVED rating; the dashboard
  * labels it that way. Returns null when the words carry no clear level.
  */

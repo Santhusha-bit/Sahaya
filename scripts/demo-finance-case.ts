@@ -30,7 +30,7 @@ async function main() {
   const read = () => caseSnapshot({ memory: finance.memory, approvals: finance.approvalService });
 
   line("═");
-  console.log("KINLINE Finance: autonomous bill investigation (Hyphenate track)");
+  console.log("SAHAYA Finance: autonomous bill investigation (Hyphenate track)");
   console.log(`Analyst:        ${claudeStatus().mode}. ${claudeStatus().detail}`);
   console.log(`Billing office: ${disputeChannelStatus().mode}. ${disputeChannelStatus().detail}`);
   line("═");

@@ -47,7 +47,7 @@ export const DEFAULT_MANDATE = { perPaymentLimitUsd: 0.05, dailyLimitUsd: 0.25 }
 
 export type X402Transport = (url: string, headers: Record<string, string>) => Promise<Response>;
 
-const TRANSPORT_KEY = "__kinline_x402_transport__";
+const TRANSPORT_KEY = "__sahaya_x402_transport__";
 
 export function getTransport(): { transport: X402Transport; origin: string } {
   const override = (globalThis as Record<string, unknown>)[TRANSPORT_KEY] as { transport: X402Transport; origin: string } | undefined;

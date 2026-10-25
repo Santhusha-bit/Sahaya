@@ -32,7 +32,7 @@ async function main() {
   const checks: [string, boolean][] = [];
 
   line("═");
-  console.log("KINLINE: Wellness continuity with Moss");
+  console.log("SAHAYA: Wellness continuity with Moss");
   console.log(`Moss: ${status.mode.toUpperCase()} (${moss.backend}). ${status.detail}`);
   line("═");
 

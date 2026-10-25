@@ -1,6 +1,6 @@
-# Kinline — Guardian Safety Platform Milestones
+# Sahaya — Guardian Safety Platform Milestones
 
-This file tracks the five-track build layered on the existing four-agent Kinline
+This file tracks the five-track build layered on the existing four-agent Sahaya
 runtime (BaseAgent, tool registry, AgentEventBus, approvals, scoped memory,
 integration-status). Each track is implemented, tested, given a one-command demo,
 type-checked/linted/tested, committed, and recorded in PROGRESS.md.

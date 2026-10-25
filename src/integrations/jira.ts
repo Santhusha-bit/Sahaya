@@ -73,10 +73,10 @@ export class JiraWorkItemStore implements WorkItemStore {
     });
   }
 
-  /** Create a Jira issue once; idempotent via the kinline-<id> label. */
+  /** Create a Jira issue once; idempotent via the Sahaya-<id> label. */
   private async ensureIssue(item: WorkItem): Promise<string | undefined> {
     if (item.externalKey) return item.externalKey;
-    const label = `kinline-${item.id}`;
+    const label = `Sahaya-${item.id}`;
     try {
       const search = await this.api(`/search/jql?jql=${encodeURIComponent(`labels=${label}`)}&fields=key`);
       if (search.ok) {

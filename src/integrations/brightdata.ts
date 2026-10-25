@@ -47,7 +47,7 @@ export interface PublicListingProvider {
 }
 
 /**
- * Only product words leave Kinline: strip anything that looks like PII and cap the
+ * Only product words leave Sahaya: strip anything that looks like PII and cap the
  * length, so a query can never carry a name, number or address to a third party.
  */
 export function sanitizeProductQuery(query: string): string {
@@ -231,7 +231,7 @@ export class CachingListingProvider implements PublicListingProvider {
 
 /* ------------------------------------------------------------- singleton */
 
-const GLOBAL_KEY = "__kinline_listing_provider__";
+const GLOBAL_KEY = "__sahaya_listing_provider__";
 
 export function getPublicListingProvider(): PublicListingProvider {
   const g = globalThis as Record<string, unknown>;

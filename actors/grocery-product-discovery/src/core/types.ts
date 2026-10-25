@@ -2,7 +2,7 @@
  * Normalized data contract for the Grocery Product Discovery Actor.
  *
  * Every source (Open Prices, Kroger, ...) maps its raw payload into ProductOffer,
- * so consumers (Kinline's Care agent, or anyone running the Actor) get one
+ * so consumers (Sahaya's Care agent, or anyone running the Actor) get one
  * stable shape regardless of where the data came from.
  */
 

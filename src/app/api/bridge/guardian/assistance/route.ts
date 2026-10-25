@@ -11,13 +11,13 @@ export const dynamic = "force-dynamic";
  * uAgent identity; the TS Guardian then runs its own policy + consent checks and
  * creates the coordination task. Set GUARDIAN_AGENT_URL=<app>/api/bridge/guardian.
  *
- * Auth: when KINLINE_BRIDGE_TOKEN is set, the x-kinline-bridge-token header must
+ * Auth: when SAHAYA_BRIDGE_TOKEN is set, the x-sahaya-bridge-token header must
  * match. Without a token the endpoint only runs outside production.
  */
 export async function POST(req: Request) {
-  const token = process.env.KINLINE_BRIDGE_TOKEN?.trim();
+  const token = process.env.SAHAYA_BRIDGE_TOKEN?.trim();
   if (token) {
-    if (req.headers.get("x-kinline-bridge-token") !== token) {
+    if (req.headers.get("x-sahaya-bridge-token") !== token) {
       return NextResponse.json({ status: "rejected", reason: "bad_bridge_token" }, { status: 401 });
     }
   } else if (process.env.NODE_ENV === "production") {

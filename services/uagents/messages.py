@@ -1,4 +1,4 @@
-"""Typed messages exchanged between the Kinline uAgents.
+"""Typed messages exchanged between the Sahaya uAgents.
 
 These mirror the TypeScript Zod schemas in src/integrations/fetchai.ts so the same
 contract holds on both sides of the bridge. Only these fields ever cross; no

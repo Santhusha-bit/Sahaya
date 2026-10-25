@@ -35,7 +35,7 @@ async function main() {
   const finance = createAgent("finance", { data, userId: USER });
 
   line("=");
-  console.log("KINLINE: Finance buys a financial-data report over x402 (sandbox experiment)");
+  console.log("SAHAYA: Finance buys a financial-data report over x402 (sandbox experiment)");
   line("=");
   console.log((await finance.executeTool("getFinancialReportSpending", {})).result.summary);
 

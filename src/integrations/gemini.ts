@@ -152,7 +152,7 @@ export class SandboxPantryVisionAdapter implements PantryVisionProvider {
 }
 
 /** Process-wide provider (swappable in tests/demos, like the inference provider). */
-const GLOBAL_KEY = "__kinline_pantry_vision__";
+const GLOBAL_KEY = "__sahaya_pantry_vision__";
 
 export function getPantryVisionProvider(): PantryVisionProvider {
   const g = globalThis as Record<string, unknown>;

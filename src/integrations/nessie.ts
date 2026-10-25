@@ -232,7 +232,7 @@ function emptyState(): SandboxState {
 
 /* ----------------------------------------------------------------- pick -- */
 
-const GLOBAL_KEY = "__kinline_nessie_sandbox__";
+const GLOBAL_KEY = "__sahaya_nessie_sandbox__";
 
 /**
  * Process-wide client: live Nessie when NESSIE_API_KEY is set, otherwise one

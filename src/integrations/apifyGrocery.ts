@@ -423,7 +423,7 @@ class FallbackDiscovery implements GroceryDiscoveryProvider {
   }
 }
 
-const GLOBAL_KEY = "__kinline_grocery_discovery__";
+const GLOBAL_KEY = "__sahaya_grocery_discovery__";
 
 export function getGroceryDiscoveryProvider(): GroceryDiscoveryProvider {
   const g = globalThis as Record<string, unknown>;

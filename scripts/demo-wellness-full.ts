@@ -28,7 +28,7 @@ async function main() {
   await wellness.initialize();
 
   line("═");
-  console.log("KINLINE — Full Wellness integration (Margaret's week)");
+  console.log("Sahaya — Full Wellness integration (Margaret's week)");
   console.log("Integrations:");
   for (const s of allIntegrationStatuses().filter((x) => ["claude", "bitdeer", "convex", "moss", "backboard", "tigerdata", "snowflake"].includes(x.key))) {
     console.log(`   - ${s.label}: ${s.mode}`);

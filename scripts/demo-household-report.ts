@@ -5,7 +5,7 @@
  *   1. Care records medication confirmations; Care asks Guardian for help twice.
  *   2. The analytics export sends ONLY consented, de-identified facts to Snowflake.
  *   3. Snowflake computes the monthly summary (one GROUP BY query).
- *   4. Kinline retrieves the aggregates and builds the caregiver's report.
+ *   4. Sahaya retrieves the aggregates and builds the caregiver's report.
  *   5. Another household is refused; revoking consent withdraws that category.
  * Live with SNOWFLAKE_ACCOUNT + SNOWFLAKE_TOKEN (+ warehouse/database/schema),
  * else a labeled sandbox with the same interface and the same math.
@@ -40,7 +40,7 @@ async function main() {
   const prev = previousPeriod(period);
 
   line("═");
-  console.log(`KINLINE: monthly family care summary (Snowflake mode: ${status.mode})`);
+  console.log(`SAHAYA: monthly family care summary (Snowflake mode: ${status.mode})`);
   console.log(status.detail);
   line("═");
 

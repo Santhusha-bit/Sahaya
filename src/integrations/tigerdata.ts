@@ -4,7 +4,7 @@
  * Convex (the Wellness agent's scoped memory) stays the canonical store for
  * every observation. Tiger Data is a NUMERIC ANALYTICS MIRROR: the sync job
  * (src/agents/wellness/timeSeriesSync.ts) writes approved numeric observations
- * here, and Kinline queries weekly / monthly aggregates back. Raw conversation
+ * here, and Sahaya queries weekly / monthly aggregates back. Raw conversation
  * text is never written to this store, only the narrow record below.
  *
  * Two backends behind one interface:
@@ -472,7 +472,7 @@ export class TigerDataTimeSeries implements TimeSeriesProvider {
 // Provider registry
 // ---------------------------------------------------------------------------
 
-const GLOBAL_KEY = "__kinline_tigerdata__";
+const GLOBAL_KEY = "__sahaya_tigerdata__";
 
 export function getTimeSeriesProvider(): TimeSeriesProvider {
   const g = globalThis as Record<string, unknown>;

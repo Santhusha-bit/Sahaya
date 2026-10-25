@@ -108,7 +108,7 @@ describe("live Backboard adapter HTTP contract", () => {
     const responses = [
       { assistant_id: "asst-1" },
       { memory_id: "mem-1" },
-      { memories: [{ id: "mem-1", content: "I love gardening.", score: 0.91, metadata: { kinline_record_id: "r1" } }] },
+      { memories: [{ id: "mem-1", content: "I love gardening.", score: 0.91, metadata: { sahaya_record_id: "r1" } }] },
       {},
     ];
     vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
@@ -119,13 +119,13 @@ describe("live Backboard adapter HTTP contract", () => {
     const bb = new BackboardConversationMemory("test-key", "https://app.backboard.io/api");
     const tag = userTag("margaret");
     const space = await bb.createSpace(tag);
-    const { memoryId } = await bb.add(space, { content: "I love gardening.", metadata: { kinline_record_id: "r1" } });
+    const { memoryId } = await bb.add(space, { content: "I love gardening.", metadata: { sahaya_record_id: "r1" } });
     const hits = await bb.search(space, "garden", 3);
     await bb.remove(space, "mem-1");
 
     expect(space).toBe("asst-1");
     expect(memoryId).toBe("mem-1");
-    expect(hits[0]).toEqual({ memoryId: "mem-1", content: "I love gardening.", score: 0.91, metadata: { kinline_record_id: "r1" } });
+    expect(hits[0]).toEqual({ memoryId: "mem-1", content: "I love gardening.", score: 0.91, metadata: { sahaya_record_id: "r1" } });
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       "POST https://app.backboard.io/api/assistants",
       "POST https://app.backboard.io/api/assistants/asst-1/memories",
@@ -133,7 +133,7 @@ describe("live Backboard adapter HTTP contract", () => {
       "DELETE https://app.backboard.io/api/assistants/asst-1/memories/mem-1",
     ]);
     expect(calls.every((c) => c.headers["X-API-Key"] === "test-key")).toBe(true);
-    // The raw user id never leaves Kinline.
+    // The raw user id never leaves Sahaya.
     expect(JSON.stringify(calls)).not.toMatch(/margaret/);
     expect(calls[2].body).toEqual({ query: "garden", limit: 3 });
   });

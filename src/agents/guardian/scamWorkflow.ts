@@ -261,7 +261,7 @@ export async function runScamScreening(
     let smsSid: string | undefined;
     let smsError: string | undefined;
     if (phone && (alert.channel === "sms" || alert.channel === "phone")) {
-      const sms = await sendSms({ to: phone, body: `Kinline Guardian: ${alert.message}` });
+      const sms = await sendSms({ to: phone, body: `Sahaya Guardian: ${alert.message}` });
       smsDelivered = sms.backend === "twilio" && sms.sent;
       smsSid = sms.sid;
       smsError = sms.reason;

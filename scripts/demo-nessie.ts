@@ -34,7 +34,7 @@ async function main() {
   await finance.initialize();
 
   line("═");
-  console.log("KINLINE: Finance + Capital One Nessie demo");
+  console.log("SAHAYA: Finance + Capital One Nessie demo");
   for (const s of [nessieStatus(), claudeStatus(), convexStatus()]) console.log(`${s.label}: ${s.mode}. ${s.detail}`);
   line("═");
 

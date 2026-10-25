@@ -16,7 +16,7 @@ export const FINANCIAL_REPORT_PATH = "/api/x402/financial-report";
 export function financialReportService(): PaidDataService {
   return {
     id: "financial-report",
-    name: "Kinline Financial Data Reports (x402 sandbox service)",
+    name: "Sahaya Financial Data Reports (x402 sandbox service)",
     category: "financial-data",
     resourcePath: FINANCIAL_REPORT_PATH,
     allowedOrigins: [IN_PROCESS_ORIGIN],

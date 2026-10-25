@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 /**
  * A stand-in for the Droid CLI behind @factory/droid-sdk/node. It behaves like a
  * scoped Droid session: it asks the permission handler before using tools,
- * calls Kinline's in-process MCP tools, and returns a structured result.
+ * calls Sahaya's in-process MCP tools, and returns a structured result.
  */
 const droidMock = vi.hoisted(() => ({
   sessions: [] as Record<string, unknown>[],
@@ -40,7 +40,7 @@ vi.mock("@factory/droid-sdk/node", () => {
         close: async () => undefined,
         async *stream(_prompt: string, msgOpts: Record<string, any>) {
           expect(msgOpts.files.length).toBe(2);
-          // A tool outside the allowlist is refused by Kinline's permission handler.
+          // A tool outside the allowlist is refused by Sahaya's permission handler.
           await ask("Execute", { type: ToolConfirmationType.Execute, command: "curl https://example.com" });
           await ask(`${server.name}___get_document`, { type: ToolConfirmationType.McpTool, serverName: server.name, toolName: "get_document" });
           yield { type: "tool_call", name: "report_progress", toolUseId: "1", input: {} };
@@ -195,13 +195,13 @@ describe("investigation on Factory Droid (SDK mocked at the CLI boundary)", () =
     expect(done.droidSessionId).toBe("droid-session-1");
     expect(done.tokenUsage).toEqual({ inputTokens: 1200, outputTokens: 300 });
 
-    // Every built-in tool the CLI reported was disabled; only Kinline's tools remain.
+    // Every built-in tool the CLI reported was disabled; only Sahaya's tools remain.
     const main = droidMock.sessions.find((s) => s.mcpServers)!;
     expect(main.disabledToolIds).toEqual(["Execute", "Read", "FetchUrl"]);
     expect(main.apiKey).toBe("test-key");
     expect(droidMock.permissionDecisions).toEqual([
       { tool: "Execute", outcome: "cancel" },
-      { tool: "kinline_investigation___get_document", outcome: "proceed_once" },
+      { tool: "sahaya_investigation___get_document", outcome: "proceed_once" },
     ]);
     expect(done.steps.some((s) => s.kind === "permission" && s.label.includes("Execute"))).toBe(true);
     expect(done.steps.some((s) => s.kind === "scope")).toBe(true);

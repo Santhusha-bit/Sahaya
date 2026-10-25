@@ -228,7 +228,7 @@ async function syncRecord(memory: ScopedMemory, provider: ConversationMemoryProv
     const { memoryId } = await provider.add(spaceId, {
       content: rec.fact,
       metadata: {
-        kinline_record_id: rec.recordId,
+        sahaya_record_id: rec.recordId,
         user_tag: userTag(userId),
         category: rec.category,
         topic: rec.topic,
@@ -349,7 +349,7 @@ export async function recallConversationContext(opts: {
   const rejected: RecallResult["rejected"] = [];
   const seen = new Set<string>();
   for (const hit of hits) {
-    const pointer = typeof hit.metadata.kinline_record_id === "string" ? hit.metadata.kinline_record_id : null;
+    const pointer = typeof hit.metadata.sahaya_record_id === "string" ? hit.metadata.sahaya_record_id : null;
     // Map to the canonical record. A metadata pointer is honoured only for a record
     // in THIS user's scoped memory whose write never returned a Backboard id.
     const rec = byMemoryId.get(hit.memoryId)

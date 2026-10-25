@@ -33,7 +33,7 @@ async function main() {
   const data = getDataLayer();
 
   line("═");
-  console.log("KINLINE Guardian: incident search demo");
+  console.log("SAHAYA Guardian: incident search demo");
   console.log(`Data layer: ${data.backend}   Search index: ${elasticStatus().mode}   Claude: ${isClaudeLive() ? "live" : "template"}`);
   console.log(elasticStatus().detail);
   line("═");

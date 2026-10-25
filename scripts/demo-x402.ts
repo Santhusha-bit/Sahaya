@@ -36,7 +36,7 @@ async function main() {
   const wallet = getX402Wallet();
 
   line("=");
-  console.log("KINLINE: Coinbase x402 paid agent services demo");
+  console.log("SAHAYA: Coinbase x402 paid agent services demo");
   console.log(`x402: ${x402Status().mode}. ${x402Status().detail}`);
   console.log(`Care wallet: ${wallet.address} (${wallet.backend})`);
   line("=");

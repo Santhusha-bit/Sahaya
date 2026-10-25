@@ -9,7 +9,7 @@
  *     published here (defends cases 20, 22).
  *   - `household_care_facts`: one row per consented Care record, reduced to
  *     (category, outcome, day). The monthly summary is computed IN Snowflake by a
- *     single GROUP BY query; Kinline only reads the aggregate result back.
+ *     single GROUP BY query; Sahaya only reads the aggregate result back.
  *
  * Enforcement built into this layer:
  *   - idempotent publish on (householdId, period, metric): a repeated sync does
@@ -412,7 +412,7 @@ export class SnowflakeAnalytics implements AnalyticsProvider {
   }
 }
 
-const GLOBAL_KEY = "__kinline_snowflake__";
+const GLOBAL_KEY = "__Sahaya_snowflake__";
 
 function env(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;

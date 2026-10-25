@@ -84,7 +84,7 @@ export interface ContinuitySyncResult {
 }
 
 function docIdFor(userId: string, key: string): string {
-  const salt = process.env.MOSS_SUBJECT_SALT?.trim() || "kinline-dev-salt";
+  const salt = process.env.MOSS_SUBJECT_SALT?.trim() || "sahaya-dev-salt";
   return `kc_${createHmac("sha256", salt).update(`${userId}:${key}`).digest("hex").slice(0, 24)}`;
 }
 
@@ -268,7 +268,7 @@ export async function syncContinuity(opts: {
     };
     writes.push({ rec: prev, data });
     if (sync === "synced") {
-      toUpsert.push({ id: docId, text: cue.text, metadata: { subject, topic: cue.topic, signal: cue.signal, kind: "kinline-wellness-continuity" } });
+      toUpsert.push({ id: docId, text: cue.text, metadata: { subject, topic: cue.topic, signal: cue.signal, kind: "sahaya-wellness-continuity" } });
     } else if (prev?.sync === "synced") {
       toRemove.push(docId);
     }

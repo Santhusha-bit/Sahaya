@@ -157,7 +157,7 @@ export class ElasticSearchIndex implements IncidentSearchIndex {
   constructor(
     private readonly url: string,
     private readonly apiKey: string,
-    private readonly indexName = "kinline-incidents",
+    private readonly indexName = "sahaya-incidents",
   ) {}
 
   private async es(path: string, init?: RequestInit): Promise<Response> {
@@ -252,7 +252,7 @@ export class ElasticSearchIndex implements IncidentSearchIndex {
 }
 
 /** Process-wide singleton (like the data layer). Tests can reset/inject. */
-const GLOBAL_KEY = "__kinline_incident_index__";
+const GLOBAL_KEY = "__sahaya_incident_index__";
 
 export function getIncidentIndex(): IncidentSearchIndex {
   const g = globalThis as Record<string, unknown>;

@@ -44,7 +44,7 @@ async function main() {
   await finance.initialize();
 
   line("═");
-  console.log("KINLINE: Finance credit & identity review (CRS Credit API)");
+  console.log("SAHAYA: Finance credit & identity review (CRS Credit API)");
   console.log(`CRS:    ${crsStatus().mode.toUpperCase()}: ${crsStatus().detail}`);
   console.log(`Claude: ${claudeStatus().mode.toUpperCase()}`);
   line("═");

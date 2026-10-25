@@ -15,7 +15,7 @@
  * re-verified against the Convex record before use (see conversationContext.ts).
  *
  * Live API (docs.backboard.io): base https://app.backboard.io/api, header
- * `X-API-Key`. Memories are scoped to an assistant, so each Kinline user gets their
+ * `X-API-Key`. Memories are scoped to an assistant, so each Sahaya user gets their
  * OWN Backboard assistant ("space"); the space id is stored in that user's scoped
  * Convex memory, which makes cross-user retrieval impossible by construction.
  *   POST   /assistants                                  { name, system_prompt } -> { assistant_id }
@@ -45,9 +45,9 @@ export interface ConversationMemoryProvider {
   remove(spaceId: string, memoryId: string): Promise<boolean>;
 }
 
-/** Pseudonymous tag for a Kinline user: the raw user id never leaves Kinline. */
+/** Pseudonymous tag for a Sahaya user: the raw user id never leaves Sahaya. */
 export function userTag(userId: string): string {
-  return createHash("sha256").update(`kinline-wellness:${userId}`).digest("hex").slice(0, 16);
+  return createHash("sha256").update(`sahaya-wellness:${userId}`).digest("hex").slice(0, 16);
 }
 
 const STOP = new Set(["the", "a", "an", "to", "of", "and", "or", "in", "on", "for", "is", "it", "me", "my", "i", "you", "your", "been", "have", "had", "about", "last", "this", "that", "what", "remember", "told", "tell", "did", "was", "were", "how"]);
@@ -131,8 +131,8 @@ export class BackboardConversationMemory implements ConversationMemoryProvider {
     const res = await this.req("/assistants", {
       method: "POST",
       body: JSON.stringify({
-        name: `kinline-wellness-${tag}`,
-        system_prompt: "Long-term conversational context index for one Kinline Wellness user. Stores short, consented life-context facts only.",
+        name: `sahaya-wellness-${tag}`,
+        system_prompt: "Long-term conversational context index for one Sahaya Wellness user. Stores short, consented life-context facts only.",
       }),
     });
     if (!res.ok) throw new Error(`Backboard create assistant failed: ${res.status}`);
@@ -176,7 +176,7 @@ export class BackboardConversationMemory implements ConversationMemoryProvider {
   }
 }
 
-const GLOBAL_KEY = "__kinline_backboard__";
+const GLOBAL_KEY = "__Sahaya_backboard__";
 
 export function getConversationMemoryProvider(): ConversationMemoryProvider {
   const g = globalThis as Record<string, unknown>;

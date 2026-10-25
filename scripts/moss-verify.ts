@@ -21,7 +21,7 @@ async function main() {
   console.log(`${v.ok ? "✓" : "✗"} listIndexes: ${v.detail}`);
   if (!v.ok) process.exit(1);
 
-  const probe = { id: `kc_probe_${id()}`, text: "Kinline connectivity probe.", metadata: { subject: "probe", topic: "probe", signal: "mentioned", kind: "kinline-probe" } };
+  const probe = { id: `kc_probe_${id()}`, text: "Sahaya connectivity probe.", metadata: { subject: "probe", topic: "probe", signal: "mentioned", kind: "sahaya-probe" } };
   await moss.upsert([probe]);
   console.log("✓ addDocs accepted (async build job started).");
   const got = await moss.get([probe.id]);

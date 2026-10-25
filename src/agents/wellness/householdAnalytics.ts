@@ -18,7 +18,7 @@ import { getAnalyticsProvider, type AggregateMetric, type HouseholdAggregate } f
 import { activeObservations } from "./wellnessStore";
 
 /** Demo household model. In production this comes from the org/household directory. */
-export const DEMO_HOUSEHOLD = process.env.KINLINE_DEMO_HOUSEHOLD?.trim() || "household-demo";
+export const DEMO_HOUSEHOLD = process.env.SAHAYA_DEMO_HOUSEHOLD?.trim() || "household-demo";
 
 export function householdForUser(_userId: string): string {
   return DEMO_HOUSEHOLD;

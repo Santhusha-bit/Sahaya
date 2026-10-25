@@ -81,7 +81,7 @@ export class SandboxBillingOffice implements DisputeChannel {
   }
 }
 
-const GLOBAL_KEY = "__kinline_billing_office__";
+const GLOBAL_KEY = "__sahaya_billing_office__";
 
 /** Process-wide channel so idempotency holds across requests. */
 export function getDisputeChannel(): DisputeChannel {

@@ -54,8 +54,8 @@ export function financeReportsEnabled(): boolean {
 // Finance's sandbox wallet + in-process transport (test hooks via globalThis)
 // ---------------------------------------------------------------------------
 
-const WALLET_KEY = "__kinline_x402_finance_wallet__";
-const TRANSPORT_KEY = "__kinline_x402_finance_transport__";
+const WALLET_KEY = "__sahaya_x402_finance_wallet__";
+const TRANSPORT_KEY = "__sahaya_x402_finance_transport__";
 
 /** Always a throwaway key with no funds. Never reads X402_WALLET_PRIVATE_KEY. */
 export function getFinanceWallet(): X402Wallet {

@@ -4,7 +4,7 @@ import type { CrsSubject } from "@/integrations/crs";
 /**
  * CRS test identities Finance is allowed to use.
  *
- * Kinline never sends a real person's identity to CRS. The account holder is
+ * Sahaya never sends a real person's identity to CRS. The account holder is
  * linked to one CRS sandbox persona (CRS_LINKED_PERSONA, default P13), and every
  * request is built from that persona's fixed fields, never from model or user text.
  *
@@ -76,7 +76,7 @@ export function findTestIdentity(personaId: string): CrsTestIdentity | undefined
   return testIdentities()[personaId];
 }
 
-/** The persona linked to the Kinline account holder. */
+/** The persona linked to the Sahaya account holder. */
 export function linkedPersonaId(): string {
   return process.env.CRS_LINKED_PERSONA?.trim() || "P13";
 }

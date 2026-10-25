@@ -147,7 +147,7 @@ describe("live Moss adapter speaks the documented control-plane API", () => {
           : { jobId: "j1", status: "building" };
       return new Response(JSON.stringify(payload), { status: 200 });
     });
-    const moss = new MossPersonalMemory({ projectId: "p1", projectKey: "k1", indexName: "kinline" });
+    const moss = new MossPersonalMemory({ projectId: "p1", projectKey: "k1", indexName: "sahaya" });
     const doc: MossDoc = { id: "kc_a", text: "A", metadata: { subject: "s" } };
     await moss.upsert([doc]);
     const got = await moss.get(["kc_a"]);
@@ -158,7 +158,7 @@ describe("live Moss adapter speaks the documented control-plane API", () => {
     expect(headers["x-project-key"]).toBe("k1");
     expect(headers["x-service-version"]).toBe("v1");
     const bodies = calls.map((c) => JSON.parse(String(c.init.body)));
-    expect(bodies[0]).toMatchObject({ action: "addDocs", projectId: "p1", indexName: "kinline", docs: [doc], options: { upsert: true } });
+    expect(bodies[0]).toMatchObject({ action: "addDocs", projectId: "p1", indexName: "sahaya", docs: [doc], options: { upsert: true } });
     expect(bodies[1]).toMatchObject({ action: "getDocs", options: { docIds: ["kc_a"] } });
     expect(bodies[2]).toMatchObject({ action: "deleteDocs", docIds: ["kc_a"] });
     expect(got.map((d) => d.id)).toEqual(["kc_a"]); // server over-return is filtered

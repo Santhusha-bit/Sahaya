@@ -109,7 +109,7 @@ export function assertSandboxBaseUrl(baseUrl: string): void {
     throw new CrsError(`Invalid CRS base URL: ${baseUrl}`, "production_refused");
   }
   if (host !== SANDBOX_HOST) {
-    throw new CrsError(`Refusing to call ${host}: Kinline only uses the CRS sandbox (${SANDBOX_HOST}).`, "production_refused");
+    throw new CrsError(`Refusing to call ${host}: Sahaya only uses the CRS sandbox (${SANDBOX_HOST}).`, "production_refused");
   }
 }
 

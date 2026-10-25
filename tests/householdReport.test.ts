@@ -174,14 +174,14 @@ describe("monthly family care summary (Snowflake household analytics)", () => {
       return new Response(JSON.stringify(payload), { status: 200 });
     });
 
-    const sf = new SnowflakeAnalytics({ account: "acme-kinline", token: "t0k", warehouse: "WH", database: "DB", schema: "PUBLIC" });
+    const sf = new SnowflakeAnalytics({ account: "acme-sahaya", token: "t0k", warehouse: "WH", database: "DB", schema: "PUBLIC" });
     const rows = await sf.summarizeCare({ householdId: "h1", authorizedHouseholds: ["h1"], periods: ["2026-10", "2026-09"] });
     expect(rows).toEqual([
       { period: "2026-10", category: "medication_confirmation", total: 4, outcomes: { taken: 3, skipped: 1, completed: 0, open: 0, declined: 0 }, activeDays: 3 },
     ]);
 
     const last = calls.at(-1)!;
-    expect(last.url).toBe("https://acme-kinline.snowflakecomputing.com/api/v2/statements");
+    expect(last.url).toBe("https://acme-sahaya.snowflakecomputing.com/api/v2/statements");
     const headers = last.init.headers as Record<string, string>;
     expect(headers["X-Snowflake-Authorization-Token-Type"]).toBe("PROGRAMMATIC_ACCESS_TOKEN");
     const body = JSON.parse(String(last.init.body));

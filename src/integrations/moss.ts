@@ -13,7 +13,7 @@
  *   - The docs make NO promises about encryption at rest, retention or compliance,
  *     and SDK telemetry is always on (index names are sent verbatim).
  *
- * Consequence for Kinline: Moss is NOT the system of record for sensitive memory.
+ * Consequence for Sahaya: Moss is NOT the system of record for sensitive memory.
  * Convex is canonical. Moss only receives minimized, consented continuity cues
  * keyed by opaque ids and a pseudonymous subject (see continuityMemory.ts), and
  * retrieval asks Moss only for doc ids Convex says belong to the user.
@@ -135,11 +135,11 @@ export function mossConfigFromEnv(): MossConfig | null {
  * lives only in Convex. Salted so subjects can't be recomputed from a known id.
  */
 export function mossSubject(userId: string): string {
-  const salt = process.env.MOSS_SUBJECT_SALT?.trim() || "kinline-dev-salt";
+  const salt = process.env.MOSS_SUBJECT_SALT?.trim() || "sahaya-dev-salt";
   return createHmac("sha256", salt).update(userId).digest("hex").slice(0, 24);
 }
 
-const GLOBAL_KEY = "__kinline_moss__";
+const GLOBAL_KEY = "__Sahaya_moss__";
 
 export function getPersonalMemoryProvider(): PersonalMemoryProvider {
   const g = globalThis as Record<string, unknown>;

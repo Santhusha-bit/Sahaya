@@ -694,7 +694,7 @@ export const WELLNESS_ATTACK_CASES: WellnessAttackCase[] = [
       await saveConversationContext({ memory: margaret.memory, userId: "margaret", consent: DEFAULT_CONSENT, text: "I enjoy baking scones." });
       const [foreign] = await listRememberedContext(other.memory);
       const sb = getConversationMemoryProvider() as SandboxConversationMemory;
-      sb._inject(await spaceOf(margaret), foreign.fact, { kinline_record_id: foreign.recordId, topic: "daughter visit" });
+      sb._inject(await spaceOf(margaret), foreign.fact, { sahaya_record_id: foreign.recordId, topic: "daughter visit" });
       const r = await recallConversationContext({ memory: margaret.memory, userId: "margaret", consent: DEFAULT_CONSENT, query: "daughter visiting Ohio" });
       const leaked = r.recalled.some((x) => /Ann/.test(x.fact));
       return { safe: !leaked && r.rejected.some((x) => x.reason === "no_canonical_record"), actual: `leaked=${leaked}, rejected=${r.rejected.map((x) => x.reason).join(",")}` };

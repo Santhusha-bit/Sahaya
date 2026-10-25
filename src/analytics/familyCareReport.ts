@@ -1,7 +1,7 @@
 /**
  * Monthly family care summary.
  *
- * Kinline retrieves ONLY aggregate rows from Snowflake (the GROUP BY result for
+ * Sahaya retrieves ONLY aggregate rows from Snowflake (the GROUP BY result for
  * care facts, plus the Wellness aggregates already published there) and turns
  * them into a short, non-diagnostic report for the caregiver. Access is limited
  * to households the requester is authorized for; anyone else gets a refusal, not

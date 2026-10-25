@@ -421,7 +421,7 @@ export const careTools: AgentTool[] = [
       let fetched: ListingFetch;
       let fetchError: string | null = null;
       try {
-        // Only the product name leaves Kinline, never the person's message.
+        // Only the product name leaves Sahaya, never the person's message.
         fetched = await provider.fetchListings(candidate.name);
       } catch (err) {
         fetchError = err instanceof Error ? err.message : String(err);

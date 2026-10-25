@@ -231,7 +231,7 @@ export const guardianTools: AgentTool[] = [
       let smsError: string | undefined;
       let smsSid: string | undefined;
       if (phone) {
-        const sms = await sendSms({ to: phone, body: `Kinline Guardian: ${input.message}` });
+        const sms = await sendSms({ to: phone, body: `Sahaya Guardian: ${input.message}` });
         channel = sms.backend === "twilio" && sms.sent ? "sms" : "in_app";
         delivered = sms.sent || channel === "in_app";
         smsError = sms.reason;

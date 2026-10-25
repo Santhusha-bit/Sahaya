@@ -94,7 +94,7 @@ export function resolveInput(input: DiscoveryInput) {
 
 /**
  * Run product discovery for a whole shopping list. Pure apart from the injected
- * fetch, so the same code runs inside the Apify Actor, in Kinline's local mode,
+ * fetch, so the same code runs inside the Apify Actor, in Sahaya's local mode,
  * and in tests with a mocked fetch.
  */
 export async function discoverProducts(input: DiscoveryInput, deps: DiscoveryDeps = {}): Promise<DiscoveryResult> {

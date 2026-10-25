@@ -176,7 +176,7 @@ export function MonthlyCareReport() {
             })}
           </div>
           <p className="mt-2 text-[12px] text-[var(--faint)]">
-            Totals only. No medication names, notes or messages leave Kinline.
+            Totals only. No medication names, notes or messages leave Sahaya.
           </p>
         </>
       ) : null}

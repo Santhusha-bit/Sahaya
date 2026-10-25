@@ -1,8 +1,8 @@
-# Kinline
+# Sahaya
 
 **Four independent AI agents in one installable care companion.**
 
-Kinline is a mobile-first PWA for older adults and their families. It is **not** one
+Sahaya is a mobile-first PWA for older adults and their families. It is **not** one
 chatbot with four prompts — it runs four separately instantiated agents, each with its
 own persona, tool registry, scoped memory, approval policy, workflows and event
 handlers. They share infrastructure but never each other's private data; they
@@ -24,7 +24,7 @@ npm run dev                  # http://localhost:3000
 npm test                     # isolation + cross-agent permission tests
 ```
 
-**No API keys required.** With keys absent, Kinline runs in **sandbox mode**: a
+**No API keys required.** With keys absent, Sahaya runs in **sandbox mode**: a
 deterministic per-agent planner drives the *same* real tools, approvals, memory and
 event bus — so every workflow is demonstrable offline. Add keys to go live.
 
@@ -131,8 +131,8 @@ same search:
    store catalog in `careTools.ts`; this is where Apify plugs in).
 2. **Verification** (Bright Data, `src/integrations/brightdata.ts`) takes that
    product's name and asks the open market, Google Shopping via the SERP API, what
-   it costs right now across retailers. Only the product name leaves Kinline.
-3. Kinline validates every listing in code (`src/agents/care/priceCompare.ts`):
+   it costs right now across retailers. Only the product name leaves Sahaya.
+3. Sahaya validates every listing in code (`src/agents/care/priceCompare.ts`):
    schema check, USD-only prices, http(s) links, markup stripped, and listings
    carrying injected instructions dropped. Sizes are normalized (gal, half gal,
    fl oz, lb, oz, ct, dozen) to a per-unit price, and listings far below the

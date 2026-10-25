@@ -2,7 +2,7 @@
 
 Give this Actor a plain shopping list such as `["whole milk", "2 x eggs", "bananas"]`. It returns **normalized grocery product offers**: product name, brand, size, price, currency, an availability indicator, the retailer and store, and a **source URL** for every record. It also returns a per-item summary with the cheapest strong match and the price range.
 
-It works for meal-planning apps, price comparison, budgeting tools, and AI agents that shop for people. It was built for [Kinline](https://github.com/Santhusha-bit/Sahaya), an elder-care assistant whose Care agent uses it to prepare a grocery cart for the user to review and approve.
+It works for meal-planning apps, price comparison, budgeting tools, and AI agents that shop for people. It was built for [Sahaya](https://github.com/Santhusha-bit/Sahaya), an elder-care assistant whose Care agent uses it to prepare a grocery cart for the user to review and approve.
 
 ## Why this Actor
 

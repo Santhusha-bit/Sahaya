@@ -541,13 +541,13 @@ export async function caseSnapshot(ctx: Pick<CaseCtx, "memory" | "approvals">, c
   };
 }
 
-/** Everything a third party needs to re-check the case without trusting Kinline. */
+/** Everything a third party needs to re-check the case without trusting Sahaya. */
 export async function evidencePacket(ctx: Pick<CaseCtx, "memory">, caseId?: string) {
   const c = await getCase(ctx, caseId);
   if (!c) return null;
   const docs = await Promise.all(c.documents.map((d) => ctx.memory.get(d.docId)));
   return {
-    format: "kinline.finance.investigation/v1",
+    format: "sahaya.finance.investigation/v1",
     generatedAt: new Date().toISOString(),
     caseId: c.caseId,
     status: c.status,

@@ -1,11 +1,11 @@
-"""Shared runtime for the Kinline uAgents.
+"""Shared runtime for the Sahaya uAgents.
 
-Each Kinline agent (wellness, care, finance, guardian) runs as its OWN uAgent in
+Each Sahaya agent (wellness, care, finance, guardian) runs as its OWN uAgent in
 its OWN process with its own seed-derived identity, port and /submit endpoint.
 Messages between them are real uAgents envelopes (signed by the sender, verified
 by the receiver), not function calls.
 
-Network modes (KINLINE_UAGENTS_NETWORK):
+Network modes (SAHAYA_UAGENTS_NETWORK):
   local (default)  Peers are resolved from the table below (RulesBasedResolver) and
                    Almanac registration is skipped, so the demo needs no internet,
                    wallet or Agentverse account.
@@ -32,7 +32,7 @@ from uagents_core.registration import AgentRegistrationPolicy
 
 from messages import LogEntry, LogsResponse
 
-HOST = os.environ.get("KINLINE_UAGENTS_HOST", "127.0.0.1")
+HOST = os.environ.get("SAHAYA_UAGENTS_HOST", "127.0.0.1")
 
 # name -> default port. Ports are overridable with UAGENT_PORT_<NAME>.
 PEERS: dict[str, int] = {
@@ -54,7 +54,7 @@ def port_of(name: str) -> int:
 def seed_of(name: str) -> str:
     # Demo seeds are deterministic so peers can compute each other's address.
     # Override per agent with UAGENT_SEED_<NAME> for anything beyond a local demo.
-    return os.environ.get(f"UAGENT_SEED_{name.upper()}", f"kinline-{name}-uagent-seed-v1")
+    return os.environ.get(f"UAGENT_SEED_{name.upper()}", f"sahaya-{name}-uagent-seed-v1")
 
 
 def address_of(name: str) -> str:
@@ -73,7 +73,7 @@ class LocalOnlyRegistration(AgentRegistrationPolicy):
 
 
 def network_mode() -> str:
-    return os.environ.get("KINLINE_UAGENTS_NETWORK", "local").strip().lower()
+    return os.environ.get("SAHAYA_UAGENTS_NETWORK", "local").strip().lower()
 
 
 def exit_with_parent() -> None:
@@ -82,7 +82,7 @@ def exit_with_parent() -> None:
     The parent holds our stdin open; EOF means it is gone. Without this, Windows
     leaves orphaned agents holding their ports after the launcher is killed.
     """
-    if os.environ.get("KINLINE_EXIT_WITH_PARENT") != "1":
+    if os.environ.get("SAHAYA_EXIT_WITH_PARENT") != "1":
         return
 
     def watch() -> None:
@@ -97,7 +97,7 @@ def exit_with_parent() -> None:
 def make_agent(name: str) -> Agent:
     exit_with_parent()
     kwargs: dict[str, Any] = dict(
-        name=f"kinline_{name}",
+        name=f"sahaya_{name}",
         seed=seed_of(name),
         port=port_of(name),
         endpoint=[endpoint_of(name)],

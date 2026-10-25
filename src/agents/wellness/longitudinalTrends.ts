@@ -35,7 +35,7 @@ import { now as nowMs } from "@/lib/id";
 import { lastSyncRun, type SyncRun } from "./timeSeriesSync";
 import { activeObservations } from "./wellnessStore";
 
-export const DEFAULT_TIMEZONE = process.env.KINLINE_TIMEZONE?.trim() || "America/Los_Angeles";
+export const DEFAULT_TIMEZONE = process.env.SAHAYA_TIMEZONE?.trim() || "America/Los_Angeles";
 
 const DAY = 86_400_000;
 /** Smallest difference worth mentioning, per metric. */

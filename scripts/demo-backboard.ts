@@ -38,7 +38,7 @@ async function main() {
   resetConversationMemoryProvider();
   const status = backboardStatus();
   line("═");
-  console.log(`KINLINE: Backboard long-term conversational context (mode: ${status.mode})`);
+  console.log(`SAHAYA: Backboard long-term conversational context (mode: ${status.mode})`);
   console.log(status.detail);
   line("═");
 

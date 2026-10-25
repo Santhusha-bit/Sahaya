@@ -70,7 +70,7 @@ async function main() {
   const status = bitdeerStatus();
   const provider = getWellnessInferenceProvider();
   line("═");
-  console.log(`KINLINE: Bitdeer AI Model Studio inference path (mode: ${status.mode})`);
+  console.log(`SAHAYA: Bitdeer AI Model Studio inference path (mode: ${status.mode})`);
   console.log(status.detail);
   console.log(`Provider: ${provider.name}  |  Model: ${provider.model}`);
   line("═");

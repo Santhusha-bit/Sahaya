@@ -22,7 +22,7 @@ interface StashedImage {
   at: number;
 }
 
-const GLOBAL_KEY = "__kinline_pantry_images__";
+const GLOBAL_KEY = "__sahaya_pantry_images__";
 
 function store(): Map<string, StashedImage> {
   const g = globalThis as Record<string, unknown>;
