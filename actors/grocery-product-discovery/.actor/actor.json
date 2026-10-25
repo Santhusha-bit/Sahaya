@@ -1,0 +1,19 @@
+{
+  "actorSpecification": 1,
+  "name": "grocery-product-discovery",
+  "title": "Grocery Product Discovery: Shopping List to Prices",
+  "description": "Turn a plain shopping list into normalized grocery product offers: product name, brand, size, price, availability indicator, retailer and source URL. Uses permitted open-data and official retailer APIs, never scraping that breaks terms of service.",
+  "version": "1.0",
+  "buildTag": "latest",
+  "meta": {
+    "templateId": "ts-empty"
+  },
+  "input": "./input_schema.json",
+  "storages": {
+    "dataset": "./dataset_schema.json"
+  },
+  "dockerfile": "../Dockerfile",
+  "readme": "../README.md",
+  "minMemoryMbytes": 256,
+  "maxMemoryMbytes": 1024
+}

@@ -13,6 +13,7 @@ import {
   requestCartApproval,
   trackLatestOrder,
 } from "./shopping/service";
+import { backendLabel, prepareCartFromDiscovery, runGroceryDiscovery, usualGroceries } from "./groceryWorkflow";
 
 /**
  * Resolve the person's on-file contact number for outbound Twilio notifications.
@@ -195,6 +196,98 @@ export const careTools: AgentTool[] = [
         summary: matches.length ? `Found ${matches.length} product(s).` : "No matching products found.",
         data: { products: matches },
       };
+    },
+  },
+  {
+    name: "discoverGroceryProducts",
+    description:
+      "Find fresh product names, prices, availability and source URLs for a shopping list by running the Apify Grocery Product Discovery Actor. Leave items empty to use the person's usual groceries. Returns a discoveryId for prepareGroceryCart.",
+    inputSchema: z.object({
+      items: z.array(z.string().min(1).max(80)).max(50).optional().describe("Shopping list entries, e.g. ['whole milk', '2 x eggs']"),
+      retailer: z.string().max(60).optional().describe("Only consider stores whose name contains this, e.g. 'Walmart'"),
+    }),
+    async execute(input, ctx) {
+      const items = input.items?.length ? input.items : await usualGroceries(ctx);
+      const { discoveryId, discovery } = await runGroceryDiscovery(ctx, items, { retailer: input.retailer });
+      const priced = discovery.items.filter((i) => i.status === "priced").length;
+      const fallback = discovery.fallbackFrom ? ` (${discovery.fallbackFrom} was unavailable, so I used a fallback)` : "";
+      return {
+        ok: true,
+        summary: `Checked ${discovery.items.length} item(s) using ${backendLabel(discovery)}${fallback}: ${priced} have current prices.`,
+        data: {
+          discoveryId,
+          backend: discovery.backend,
+          run: discovery.run,
+          items: discovery.items.map((i) => ({
+            query: i.query,
+            quantity: i.quantity,
+            status: i.status,
+            priceRange: i.priceRange,
+            options: discovery.offers
+              .filter((o) => o.query.toLowerCase() === i.query.toLowerCase())
+              .slice(0, 3)
+              .map((o) => ({
+                offerId: o.offerId,
+                name: o.productName,
+                brand: o.brand,
+                size: o.size,
+                price: o.price,
+                currency: o.currency,
+                pricePer: o.pricePer,
+                retailer: o.retailer,
+                storeLocation: o.storeLocation,
+                availability: o.availability,
+                priceObservedAt: o.priceObservedAt,
+                sourceUrl: o.sourceUrl,
+                imageUrl: o.imageUrl,
+                matchScore: o.matchScore,
+              })),
+          })),
+          warnings: discovery.warnings.slice(0, 5),
+        },
+      };
+    },
+  },
+  {
+    name: "prepareGroceryCart",
+    description:
+      "Compare the products from a discoverGroceryProducts run, pick the cheapest strong match per item, build the cart, and ask the person to approve it. Never purchases anything by itself.",
+    inputSchema: z.object({ discoveryId: z.string().min(1) }),
+    async execute(input, ctx) {
+      const res = await prepareCartFromDiscovery(ctx, input.discoveryId, { requestApproval: true });
+      if (!res.ok) {
+        return {
+          ok: false,
+          summary:
+            res.error === "no_priced_items"
+              ? "I couldn't find current prices for any of those items."
+              : "That product search has expired; let me search again.",
+          error: res.error,
+        };
+      }
+      const { plan } = res;
+      const missing = plan.missing.length ? `; couldn't price ${plan.missing.map((m) => m.query).join(", ")}` : "";
+      return {
+        ok: true,
+        summary: `Cart ready: ${plan.lines.length} item(s), $${plan.total.toFixed(2)}${missing}. Waiting for your approval.`,
+        data: {
+          cartId: res.cartId,
+          approvalId: res.approvalId,
+          total: plan.total,
+          lines: plan.lines,
+          missing: plan.missing,
+          retailers: plan.retailers,
+        },
+      };
+    },
+  },
+  {
+    name: "updateUsualGroceries",
+    description: "Save the person's usual grocery list (used when they say 'buy my usual groceries').",
+    inputSchema: z.object({ items: z.array(z.string().min(1).max(80)).min(1).max(50) }),
+    async execute(input, ctx) {
+      await ctx.memory.writeShared("groceryPreferences", { usual: input.items });
+      return { ok: true, summary: `Saved ${input.items.length} item(s) as your usual groceries.`, data: { usual: input.items } };
     },
   },
   {

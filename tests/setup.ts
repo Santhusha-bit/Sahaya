@@ -6,3 +6,7 @@ for (const k of ["FETCHAI_BRIDGE_URL", "FETCHAI_WELLNESS_URL", "FETCHAI_CARE_URL
 delete process.env.MOSS_PROJECT_ID;
 delete process.env.MOSS_PROJECT_KEY;
 delete process.env.MOSS_API_KEY;
+
+// Grocery discovery: offline fixture catalog, never the network or Apify.
+delete process.env.APIFY_TOKEN;
+process.env.GROCERY_DISCOVERY_MODE = "sandbox";

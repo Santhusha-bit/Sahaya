@@ -31,7 +31,8 @@
     "demo:household": "vite-node --config vitest.config.ts scripts/demo-household-report.ts",
     "demo:wellness-full": "vite-node --config vitest.config.ts scripts/demo-wellness-full.ts",
     "redteam:wellness": "vite-node --config vitest.config.ts scripts/redteam-wellness.ts",
-    "demo:shopping": "vite-node --config vitest.config.ts scripts/demo-shopping.ts"
+    "demo:shopping": "vite-node --config vitest.config.ts scripts/demo-shopping.ts",
+    "demo:groceries": "vite-node --config vitest.config.ts scripts/demo-groceries.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

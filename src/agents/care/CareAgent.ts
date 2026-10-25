@@ -3,6 +3,13 @@ import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/type
 import { synthesizeSpeech } from "@/integrations/cartesia";
 import { carePrompt } from "./carePrompt";
 import { careTools } from "./careTools";
+import {
+  backendLabel,
+  parseRequestedItems,
+  prepareCartFromDiscovery,
+  runGroceryDiscovery,
+  usualGroceries,
+} from "./groceryWorkflow";
 
 const USUAL_KEYS = ["milk", "bread", "eggs", "bananas", "oats", "soup", "yogurt", "cookies"];
 
@@ -49,6 +56,7 @@ export class CareAgent extends BaseAgent {
       "I took my morning blood pressure pill",
       "I need my usual groceries delivered tomorrow",
       "Where is my grocery order?",
+      "Buy whole milk, coffee and apples",
       "Suggest a few easy dinners",
     ],
     theme: {
@@ -127,6 +135,29 @@ export class CareAgent extends BaseAgent {
       return {
         reply: "Great, logging that now.",
         toolCalls: [{ name: "recordMedicationConfirmation", input: { medicationName: name, taken: true } }],
+      };
+    }
+    // An explicit list ("buy milk and eggs") gets live Apify discovery; "my usual
+    // groceries" uses the history-based cart below.
+    const explicitList = parseRequestedItems(message);
+    if (explicitList) {
+      // Full workflow: preferred items -> Apify product discovery -> compare ->
+      // cart -> REQUEST APPROVAL. Done imperatively so a real pending approval
+      // appears for the user; approving it runs requestOrderApproval, which
+      // places the order and asks Finance to review the payment.
+      const items = explicitList;
+      await ctx.memory.save("groceryLists", { items, status: "draft" }, { tags: ["grocery"] });
+      const { discoveryId, discovery } = await runGroceryDiscovery(ctx, items);
+      const cart = await prepareCartFromDiscovery(ctx, discoveryId, { requestApproval: true });
+      const source = backendLabel(discovery);
+      if (!cart.ok) {
+        return { reply: `I searched ${items.length} item(s) using ${source}, but couldn't find current prices to build a cart. Want to try different items?` };
+      }
+      const { plan } = cart;
+      const stores = plan.retailers.length ? ` from ${plan.retailers.slice(0, 3).join(", ")}${plan.retailers.length > 3 ? " and others" : ""}` : "";
+      const missing = plan.missing.length ? ` I couldn't find a price for ${plan.missing.map((x) => x.query).join(", ")}.` : "";
+      return {
+        reply: `I checked fresh prices for your list using ${source}. Your cart is ${plan.lines.length} item(s) for $${plan.total.toFixed(2)}${stores}.${missing} Please review it and approve when you're ready (see the card above).`,
       };
     }
     const shopping = shoppingIntent(message);

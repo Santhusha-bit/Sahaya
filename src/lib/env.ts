@@ -235,6 +235,22 @@ export function checkoutStatus(): IntegrationStatus {
   };
 }
 
+export function apifyGroceryStatus(): IntegrationStatus {
+  const forced = process.env.GROCERY_DISCOVERY_MODE?.trim().toLowerCase();
+  const live = has("APIFY_TOKEN") && has("APIFY_GROCERY_ACTOR_ID") && forced !== "local" && forced !== "sandbox";
+  const actor = process.env.APIFY_GROCERY_ACTOR_ID?.trim();
+  return {
+    key: "apify-grocery",
+    label: "Apify (live grocery product discovery)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? `Live: Care runs the ${actor} Actor on Apify for each shopping list and reads its dataset (names, prices, availability, source URLs).`
+      : forced === "sandbox"
+        ? "Sandbox: an offline fixture catalog with the same ranking code stands in for the Actor."
+        : "Sandbox: no APIFY_TOKEN, so the Actor's discovery code runs in-process against Open Prices (real prices, but not an Apify run).",
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -253,6 +269,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     tigerDataStatus(),
     snowflakeStatus(),
     apifyStatus(),
+    apifyGroceryStatus(),
     checkoutStatus(),
   ];
 }
