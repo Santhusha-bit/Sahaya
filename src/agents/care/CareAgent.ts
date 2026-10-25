@@ -149,6 +149,20 @@ export class CareAgent extends BaseAgent {
     if (/add (it|that|this|the (recommended|cheaper|best)( one)?)|draft cart|put (it|that) in/.test(m)) {
       return { reply: "Adding that to your draft cart.", toolCalls: [{ name: "addToDraftCart", input: { choice: "recommended" } }] };
     }
+    if (/pantry|fridge|refrigerator|photo|what (?:can|should) i (?:make|cook)/.test(m)) {
+      // Pantry-photo flow (checked before shopping so "yes, I have those" is a
+      // pantry confirmation, never mistaken for a spoken purchase approval): confirm the uncertain items first, then plan from what is confirmed.
+      if (/\b(yes|yep|confirm|have (?:them|those|all|it))\b/.test(m) && !/\b(no|not|don'?t)\b/.test(m)) {
+        return {
+          reply: "Thanks for checking.",
+          toolCalls: [
+            { name: "confirmPantryItems", input: { confirmAllUncertain: true } },
+            { name: "planDinnerFromPantry", input: {} },
+          ],
+        };
+      }
+      return { reply: "Let me look at what you have.", toolCalls: [{ name: "planDinnerFromPantry", input: {} }] };
+    }
     // An explicit list ("buy milk and eggs") gets live Apify discovery; "my usual
     // groceries" uses the history-based cart below.
     const explicitList = parseRequestedItems(message);
@@ -205,19 +219,6 @@ export class CareAgent extends BaseAgent {
         reply: "I'll ask Guardian to arrange someone to help collect that for you.",
         toolCalls: [{ name: "requestPickupHelp", input: { need: "collect a medication/refill the person cannot pick up", urgency: "soon" } }],
       };
-    }
-    if (/pantry|fridge|refrigerator|photo|what (?:can|should) i (?:make|cook)/.test(m)) {
-      // Pantry-photo flow: confirm the uncertain items first, then plan from what is confirmed.
-      if (/\b(yes|yep|confirm|have (?:them|those|all|it))\b/.test(m) && !/\b(no|not|don'?t)\b/.test(m)) {
-        return {
-          reply: "Thanks for checking.",
-          toolCalls: [
-            { name: "confirmPantryItems", input: { confirmAllUncertain: true } },
-            { name: "planDinnerFromPantry", input: {} },
-          ],
-        };
-      }
-      return { reply: "Let me look at what you have.", toolCalls: [{ name: "planDinnerFromPantry", input: {} }] };
     }
     if (/meal|dinner|eat|cook|recipe/.test(m)) {
       return { reply: "Here are a few easy ideas.", toolCalls: [{ name: "suggestMeals", input: { count: 3 } }] };
