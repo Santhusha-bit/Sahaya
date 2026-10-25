@@ -1,0 +1,8 @@
+<svg viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Backboard">
+  <g fill="none" stroke="#4F46E5" stroke-width="2.4" stroke-linejoin="round">
+    <rect x="6" y="8" width="24" height="24" rx="4"/>
+    <line x1="18" y1="8" x2="18" y2="32" stroke-opacity="0.5"/>
+    <line x1="6" y1="20" x2="30" y2="20" stroke-opacity="0.5"/>
+  </g>
+  <text x="42" y="26" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#4F46E5">Backboard</text>
+</svg>

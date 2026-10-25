@@ -1,0 +1,8 @@
+<svg viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Snowflake">
+  <g stroke="#29B5E8" stroke-width="2.6" stroke-linecap="round">
+    <line x1="17" y1="7" x2="17" y2="33"/>
+    <line x1="5.75" y1="13.5" x2="28.25" y2="26.5"/>
+    <line x1="5.75" y1="26.5" x2="28.25" y2="13.5"/>
+  </g>
+  <text x="42" y="26" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#29B5E8">Snowflake</text>
+</svg>

@@ -1,0 +1,9 @@
+<svg viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="elastic">
+  <g>
+    <path d="M17 7 A13 13 0 0 1 30 20 L17 20 Z" fill="#FEC514"/>
+    <path d="M30 20 A13 13 0 0 1 17 33 L17 20 Z" fill="#00BFB3"/>
+    <path d="M17 33 A13 13 0 0 1 4 20 L17 20 Z" fill="#1BA9F5"/>
+    <path d="M4 20 A13 13 0 0 1 17 7 L17 20 Z" fill="#F04E98"/>
+  </g>
+  <text x="42" y="26" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#1C1E23">elastic</text>
+</svg>

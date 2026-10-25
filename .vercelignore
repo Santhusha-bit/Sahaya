@@ -9,3 +9,7 @@ scripts/demo-*.ts
 scripts/redteam.ts
 scripts/serve-guardian.ts
 redteam-report.md
+
+# The marketing landing page deploys as a separate Vercel project
+# (root directory "landing"), so exclude it from the main app deploy.
+landing/

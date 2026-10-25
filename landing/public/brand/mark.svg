@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Sahaya">
+  <defs>
+    <linearGradient id="sahaya-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#19A396"/>
+      <stop offset="0.55" stop-color="#168B82"/>
+      <stop offset="1" stop-color="#4779B8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="url(#sahaya-g)"/>
+  <!-- Protective shield silhouette cradling a connection -->
+  <path d="M256 92c44 30 98 44 142 44 0 120-40 214-142 248-102-34-142-128-142-248 44 0 98-14 142-44Z"
+        fill="#ffffff" fill-opacity="0.14"/>
+  <!-- Connection / care nodes: three linked points forming an embrace -->
+  <g stroke="#ffffff" stroke-width="22" stroke-linecap="round" fill="none">
+    <path d="M186 232c0-39 31-70 70-70s70 31 70 70c0 48-70 96-70 96"/>
+  </g>
+  <circle cx="186" cy="326" r="26" fill="#ffffff"/>
+  <circle cx="326" cy="326" r="26" fill="#ffffff"/>
+  <circle cx="256" cy="356" r="30" fill="#ffffff"/>
+  <path d="M186 326c40 44 100 44 140 0" stroke="#ffffff" stroke-width="22" stroke-linecap="round" fill="none" opacity="0.65"/>
+</svg>

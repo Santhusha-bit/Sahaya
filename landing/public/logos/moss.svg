@@ -1,0 +1,7 @@
+<svg viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Moss">
+  <g fill="#1F9D74">
+    <path d="M10 28 C10 15 20 10 28 10 C28 23 18 28 10 28 Z"/>
+    <path d="M14 25 Q21 19 26 14" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-opacity="0.8"/>
+  </g>
+  <text x="42" y="26" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#1F9D74">Moss</text>
+</svg>

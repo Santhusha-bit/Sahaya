@@ -1,0 +1,322 @@
+@import "tailwindcss";
+
+/* ============================================================
+   SAHAYA DESIGN SYSTEM
+   Premium, warm, human-centered. Inspired by Apple's polish,
+   Linear's motion, Headspace's warmth.
+   ============================================================ */
+
+@theme {
+  /* Surfaces */
+  --color-bg: #fafaf7; /* warm off-white */
+  --color-bg-tint: #f3f4ef;
+  --color-surface: #ffffff;
+
+  /* Ink + text */
+  --color-ink: #172b3a; /* deep navy */
+  --color-muted: #65737e;
+  --color-faint: #9aa4ac;
+
+  /* Brand */
+  --color-brand: #168b82; /* reassuring teal */
+  --color-brand-ink: #0f6a63;
+  --color-blue: #4779b8; /* intelligent blue */
+  --color-blue-ink: #35608f;
+  --color-soft: #e5f4f0; /* soft teal */
+  --color-gold: #e8b86d; /* warm gold */
+
+  /* Lines */
+  --color-line: #e8e7e1;
+  --color-line-strong: #d9d8d0;
+
+  /* Typography */
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Easing */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Elevation (exposed as shadow-* utilities) */
+  --shadow-brand: 0 10px 30px rgba(22, 139, 130, 0.28);
+  --shadow-phone: 0 30px 60px rgba(23, 43, 58, 0.18), 0 10px 24px rgba(23, 43, 58, 0.12);
+}
+
+:root {
+  --shadow-sm: 0 1px 2px rgba(23, 43, 58, 0.04), 0 2px 6px rgba(23, 43, 58, 0.05);
+  --shadow-md: 0 4px 12px rgba(23, 43, 58, 0.06), 0 12px 32px rgba(23, 43, 58, 0.07);
+  --shadow-lg: 0 10px 24px rgba(23, 43, 58, 0.08), 0 30px 60px rgba(23, 43, 58, 0.12);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 84px;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.6;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-brand);
+  color: #fff;
+}
+
+/* Accessible focus ring everywhere */
+:where(a, button, [tabindex], input, summary):focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Custom component classes live in the components layer so Tailwind's
+   utility classes (e.g. lg:hidden, responsive overrides) always win. */
+@layer components {
+
+/* ---------- Layout helpers ---------- */
+.container-xl {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+
+.section {
+  position: relative;
+  padding-block: clamp(4.5rem, 9vw, 8rem);
+}
+
+/* ---------- Type scale ---------- */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-brand-ink);
+}
+
+.h1 {
+  font-size: clamp(2.5rem, 6vw, 4.2rem);
+  line-height: 1.03;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.h2 {
+  font-size: clamp(2rem, 4.2vw, 3.1rem);
+  line-height: 1.07;
+  font-weight: 800;
+  letter-spacing: -0.028em;
+}
+
+.h3 {
+  font-size: clamp(1.25rem, 2vw, 1.6rem);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lead {
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.text-gradient {
+  background: linear-gradient(115deg, var(--color-brand) 10%, var(--color-blue) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.85rem 1.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-spring), box-shadow 0.2s ease,
+    background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  line-height: 1;
+  white-space: nowrap;
+}
+.btn:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.btn-primary {
+  background: linear-gradient(120deg, var(--color-brand) 0%, var(--color-brand-ink) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-brand);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 38px rgba(22, 139, 130, 0.36);
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+  box-shadow: var(--shadow-sm);
+}
+.btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-brand);
+  color: var(--color-brand-ink);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-ink);
+}
+.btn-ghost:hover {
+  color: var(--color-brand-ink);
+}
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.card-lift {
+  transition: transform 0.25s var(--ease-spring), box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--color-brand) 40%, var(--color-line));
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--color-soft);
+  color: var(--color-brand-ink);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 18%, transparent);
+}
+
+/* Soft ambient blobs used behind sections */
+.ambient {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Glass surface for floating cards / navbar */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+/* ---------- Phone mockup ---------- */
+.phone {
+  position: relative;
+  width: 300px;
+  border-radius: 44px;
+  background: #0d1b24;
+  padding: 12px;
+  box-shadow: var(--shadow-phone);
+}
+.phone-screen {
+  position: relative;
+  border-radius: 34px;
+  overflow: hidden;
+  background: var(--color-bg);
+  min-height: 600px;
+}
+
+/* ---------- Chat bubbles (illustrative demos) ---------- */
+.bubble {
+  max-width: 85%;
+  padding: 0.7rem 0.95rem;
+  border-radius: 18px;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+.bubble-user {
+  align-self: flex-end;
+  background: var(--color-ink);
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.bubble-ai {
+  align-self: flex-start;
+  background: var(--color-soft);
+  color: var(--color-brand-ink);
+  border-bottom-left-radius: 6px;
+}
+
+} /* end @layer components */
+
+/* Marquee for trust row */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Voice waveform bars */
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.wave-bar {
+  animation: wave 1.1s var(--ease-spring) infinite;
+  transform-origin: center;
+}
+
+/* Reduced motion: disable all animation + smooth scroll */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

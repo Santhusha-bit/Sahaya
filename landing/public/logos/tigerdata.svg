@@ -1,0 +1,7 @@
+<svg viewBox="0 0 160 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tiger Data">
+  <g fill="none" stroke="#F6821F" stroke-width="2.4" stroke-linecap="round">
+    <circle cx="17" cy="20" r="13" stroke-opacity="0.35"/>
+    <path d="M7 22 q5 -10 10 0 t10 -2" />
+  </g>
+  <text x="42" y="26" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#F6821F">Tiger Data</text>
+</svg>
