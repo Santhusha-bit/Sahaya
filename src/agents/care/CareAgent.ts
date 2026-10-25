@@ -16,6 +16,7 @@ export class CareAgent extends BaseAgent {
       "What medications are due today?",
       "I took my morning blood pressure pill",
       "I need my usual groceries delivered tomorrow",
+      "Is my usual milk a good price right now?",
       "Suggest a few easy dinners",
     ],
     theme: {
@@ -83,6 +84,13 @@ export class CareAgent extends BaseAgent {
         reply: "Great, logging that now.",
         toolCalls: [{ name: "recordMedicationConfirmation", input: { medicationName: name, taken: true } }],
       };
+    }
+    if (/price|compare|cheap|good deal|how much|cost/.test(m)) {
+      const item = ["milk", "eggs", "oats", "bread", "bananas", "chicken", "rice", "soup", "yogurt", "apples"].find((k) => m.includes(k.replace(/s$/, ""))) ?? "milk";
+      return { reply: `Let me check current prices for ${item}.`, toolCalls: [{ name: "comparePrices", input: { query: item } }] };
+    }
+    if (/add (it|that|this|the (recommended|cheaper|best)( one)?)|draft cart|put (it|that) in/.test(m)) {
+      return { reply: "Adding that to your draft cart.", toolCalls: [{ name: "addToDraftCart", input: { choice: "recommended" } }] };
     }
     if (/grocer|order|deliver|usual/.test(m)) {
       // Full §7 workflow: retrieve prefs -> list -> cart -> REQUEST APPROVAL.

@@ -83,6 +83,31 @@ Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
 | **Cartesia** (voice TTS) | `CARTESIA_API_KEY` set | browser SpeechSynthesis |
 | **Auth0** | `AUTH0_DOMAIN`+`AUTH0_CLIENT_ID` set | single demo user |
 | **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
+| **Bright Data** (Care price verification) | `BRIGHTDATA_API_TOKEN`+`BRIGHTDATA_SERP_ZONE` set | labeled sample listings |
+
+### Shopping prices: discovery vs. verification
+
+Care's shopping flow splits two jobs so the two web-data providers never run the
+same search:
+
+1. **Discovery** finds the structured product Care would normally buy (today the
+   store catalog in `careTools.ts`; this is where Apify plugs in).
+2. **Verification** (Bright Data, `src/integrations/brightdata.ts`) takes that
+   product's name and asks the open market, Google Shopping via the SERP API, what
+   it costs right now across retailers. Only the product name leaves Kinline.
+3. Kinline validates every listing in code (`src/agents/care/priceCompare.ts`):
+   schema check, USD-only prices, http(s) links, markup stripped, and listings
+   carrying injected instructions dropped. Sizes are normalized (gal, half gal,
+   fl oz, lb, oz, ct, dozen) to a per-unit price, and listings far below the
+   median are flagged as suspicious.
+4. Care reports whether the usual price is verified, above, or below the market,
+   shows each listing's source and freshness (results older than 24h are stale
+   and can't be added), and recommends the best in-stock unit price.
+5. `addToDraftCart` adds the choice to a **draft** cart. Buying still goes
+   through `requestOrderApproval`.
+
+Demo: `npm run demo:prices` (or `npm run demo:prices -- eggs`), or ask Care
+"Is my usual milk a good price right now?".
 
 To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
 schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.

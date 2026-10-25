@@ -4,7 +4,9 @@ import { sendSms } from "@/integrations/twilio";
 import { getPersonalMemoryProvider } from "@/integrations/moss";
 import { requestCareAssistance } from "@/integrations/fetchai";
 import { createWorkItemStore } from "@/integrations/jira";
+import { getPublicListingProvider, type ListingFetch } from "@/integrations/brightdata";
 import { getDataLayer } from "../base/dataLayer";
+import { comparePrices, freshnessOf, type CandidateProduct, type PriceComparison } from "./priceCompare";
 
 /**
  * Resolve the person's on-file contact number for outbound Twilio notifications.
@@ -34,6 +36,27 @@ const CATALOG: { id: string; name: string; price: number; keywords: string[] }[]
   { id: "p_yogurt", name: "Greek Yogurt, 4-pack", price: 4.49, keywords: ["yogurt", "dairy", "protein"] },
   { id: "p_apples", name: "Apples, 3 lb bag", price: 4.99, keywords: ["apple", "fruit"] },
 ];
+
+/**
+ * Structured product discovery: find the candidate product Care would normally buy.
+ * Today this is the store catalog; it is the seam where Apify discovery plugs in.
+ * Bright Data then verifies the candidate against the open market (comparePrices).
+ */
+function discoverCandidate(query: string, productId?: string): CandidateProduct | null {
+  const terms = query.toLowerCase().split(/[,\s]+/).filter((t) => t && !/^\d+$/.test(t));
+  const product =
+    (productId && CATALOG.find((p) => p.id === productId)) ||
+    CATALOG.find((p) => terms.some((t) => p.keywords.some((k) => k === t || k === t.replace(/s$/, "")) || p.name.toLowerCase().includes(t)));
+  return product ? { id: product.id, name: product.name, price: product.price, source: "Sahaya Grocery catalog" } : null;
+}
+
+function money(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+function perUnit(unitPrice: number | null, unitLabel: string | null): string {
+  return unitPrice === null || !unitLabel ? "" : ` (${unitPrice < 0.1 ? `${(unitPrice * 100).toFixed(1)}¢` : money(unitPrice)}/${unitLabel})`;
+}
 
 export const careTools: AgentTool[] = [
   {
@@ -233,6 +256,102 @@ export const careTools: AgentTool[] = [
         ok: true,
         summary: `Cart ready: ${lines.length} item(s), total $${total.toFixed(2)}.`,
         data: { cartId: rec.id, lines, total },
+      };
+    },
+  },
+  {
+    name: "comparePrices",
+    description:
+      "Check the current public price of a grocery item. Finds the product Care would normally buy, then verifies its price against current public listings from other retailers (Bright Data when live, labeled sample listings in sandbox). Returns validated, size-normalized listings with source and freshness, a verification verdict, and a recommendation. Never buys anything.",
+    inputSchema: z.object({
+      query: z.string().min(1).max(80).describe("The item, e.g. 'milk' or '2% milk 1 gallon'"),
+      productId: z.string().optional().describe("Catalog product id, if already known"),
+    }),
+    async execute(input, ctx) {
+      const candidate = discoverCandidate(input.query, input.productId);
+      if (!candidate) {
+        return { ok: false, summary: `I couldn't find "${input.query}" in the store catalog to compare.`, error: "product_not_found" };
+      }
+      const provider = getPublicListingProvider();
+      let fetched: ListingFetch;
+      let fetchError: string | null = null;
+      try {
+        // Only the product name leaves Kinline, never the person's message.
+        fetched = await provider.fetchListings(candidate.name);
+      } catch (err) {
+        fetchError = err instanceof Error ? err.message : String(err);
+        fetched = { backend: provider.backend, sourceLabel: "Bright Data (unreachable)", query: candidate.name, fetchedAt: Date.now(), listings: [], cached: false };
+      }
+      const comparison = comparePrices(candidate, fetched);
+      const rec = await ctx.memory.save("priceChecks", { ...comparison, fetchError }, { tags: ["shopping", "price-check"] });
+
+      const v = comparison.verification;
+      const r = comparison.recommendation;
+      const verdict =
+        v.status === "verified"
+          ? `Your usual ${money(candidate.price)} is in line with the market.`
+          : v.status === "higher_than_market"
+            ? `Your usual ${money(candidate.price)} is about ${Math.abs(v.candidateDeltaPct ?? 0)}% above the market.`
+            : v.status === "lower_than_market"
+              ? `Your usual ${money(candidate.price)} is about ${Math.abs(v.candidateDeltaPct ?? 0)}% below the market.`
+              : `I couldn't verify the ${money(candidate.price)} price: ${v.note}`;
+      const pick =
+        r.choice === "candidate"
+          ? "I'd stick with your usual product."
+          : `Best value: ${r.merchant} at ${money(r.price)}${perUnit(r.unitPrice, r.unitLabel)}.`;
+      const ignored = comparison.listings.filter((l) => l.outlier).length + comparison.rejected.length;
+      const summary = fetchError
+        ? `I couldn't reach the price service just now, so ${candidate.name} at ${money(candidate.price)} is unverified.`
+        : `Checked ${candidate.name} against ${v.matchedCount} public listing(s) (${comparison.sourceLabel}, ${comparison.freshness.label}). ${verdict} ${pick}${ignored ? ` Ignored ${ignored} suspicious or invalid listing(s).` : ""}`;
+      return { ok: !fetchError, summary, data: { comparisonId: rec.id, ...comparison, fetchError } };
+    },
+  },
+  {
+    name: "addToDraftCart",
+    description:
+      "Add a product from a price comparison to the person's DRAFT cart (defaults to the recommended choice). Nothing is purchased; use requestOrderApproval on the cart afterwards.",
+    inputSchema: z.object({
+      comparisonId: z.string().optional().describe("From comparePrices; defaults to the most recent comparison"),
+      choice: z.string().default("recommended").describe("'recommended', 'candidate', or a listing id like 'l2'"),
+      quantity: z.number().int().positive().max(20).default(1),
+    }),
+    async execute(input, ctx) {
+      const rec = input.comparisonId
+        ? await ctx.memory.get(input.comparisonId)
+        : (await ctx.memory.list("priceChecks", { limit: 1 }))[0];
+      if (!rec || rec.collection !== "priceChecks") {
+        return { ok: false, summary: "I don't have a price comparison to add from. Let me check prices first.", error: "comparison_not_found" };
+      }
+      const cmp = rec.data as unknown as PriceComparison;
+      if (freshnessOf(cmp.fetchedAt).stale) {
+        return { ok: false, summary: "Those prices are over a day old. Let me check again before adding anything.", error: "stale_prices" };
+      }
+      const choice = input.choice === "recommended" ? cmp.recommendation.choice : input.choice;
+      let line: Record<string, unknown>;
+      if (choice === "candidate") {
+        const c = cmp.candidate;
+        line = { productId: c.id, name: c.name, merchant: c.source, price: c.price, source: c.source, link: null, fetchedAt: null };
+      } else {
+        const l = cmp.listings.find((x) => x.id === choice);
+        if (!l) return { ok: false, summary: `I couldn't find option ${choice} in that comparison.`, error: "listing_not_found" };
+        if (!l.matches || l.outlier || l.availability === "out_of_stock") {
+          return { ok: false, summary: `I won't add ${l.merchant}'s listing: it's ${l.availability === "out_of_stock" ? "out of stock" : "not a trustworthy match"}.`, error: "listing_not_eligible" };
+        }
+        line = { productId: `${cmp.candidate.id}@${l.id}`, name: l.title, merchant: l.merchant, price: l.price, source: l.source, link: l.link, fetchedAt: l.fetchedAt };
+      }
+      const price = Number(line.price);
+      line = { ...line, quantity: input.quantity, lineTotal: Number((price * input.quantity).toFixed(2)), comparisonId: rec.id };
+
+      const draft = (await ctx.memory.list("carts", { tag: "cart" })).find((c) => c.data.status === "draft");
+      const lines = [...(((draft?.data.lines as Record<string, unknown>[]) ?? []).filter((x) => x.productId !== line.productId)), line];
+      const total = Number(lines.reduce((s, x) => s + Number(x.lineTotal ?? 0), 0).toFixed(2));
+      const cart = draft
+        ? await ctx.memory.update(draft.id, { lines, total, status: "draft" })
+        : await ctx.memory.save("carts", { lines, total, status: "draft" }, { tags: ["cart"] });
+      return {
+        ok: true,
+        summary: `Added ${line.name} from ${line.merchant} (${money(price)}${input.quantity > 1 ? ` x${input.quantity}` : ""}) to your draft cart. Cart total ${money(total)}. Nothing is bought until you approve the order.`,
+        data: { cartId: cart?.id, lines, total, status: "draft" },
       };
     },
   },

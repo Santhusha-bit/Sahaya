@@ -2,3 +2,4 @@
 delete process.env.ANTHROPIC_API_KEY;
 delete process.env.NEXT_PUBLIC_CONVEX_URL;
 delete process.env.CARTESIA_API_KEY;
+delete process.env.BRIGHTDATA_API_TOKEN;

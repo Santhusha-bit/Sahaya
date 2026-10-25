@@ -6,6 +6,8 @@ import type { AgentMeta } from "@/agents/registry";
 import type { AgentEvent, AgentTask, Approval, ConversationMessage, ToolCallRecord } from "@/agents/base/types";
 import { AGENT_ICONS, CheckIcon, ChevronLeftIcon, MicIcon, SendIcon, XIcon } from "@/components/icons";
 import { createRecognizer, speak, speechRecognitionSupported } from "@/lib/speech";
+import type { PriceComparison } from "@/agents/care/priceCompare";
+import { PriceComparisonCard } from "./PriceComparisonCard";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -305,6 +307,11 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
                         {c.status === "success" ? "✓" : c.status === "awaiting_approval" ? "⏳" : "⚠"} {c.toolName}
                       </div>
                     ))}
+                    {m.toolCalls
+                      .filter((c) => c.toolName === "comparePrices" && c.output && (c.output as PriceComparison).listings)
+                      .map((c) => (
+                        <PriceComparisonCard key={`${c.id}-prices`} data={c.output as PriceComparison} />
+                      ))}
                   </div>
                 )}
               </div>
