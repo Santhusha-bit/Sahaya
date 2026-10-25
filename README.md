@@ -1,6 +1,7 @@
 # Sahaya
 
-
+![Sahaya](public/marketing/screenshot.png
+)
 
 **Four independent AI agents in one installable care companion.**
 
