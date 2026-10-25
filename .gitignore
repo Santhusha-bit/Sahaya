@@ -49,3 +49,4 @@ yarn-error.log*
 
 # markdown docs (kept local, not published)
 *.md
+!/README.md
