@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AgentEvent, AgentId, AgentTask, Approval } from "@/agents/base/types";
+import { MonthlyCareReport } from "@/components/MonthlyCareReport";
 
 type PerAgent = Record<AgentId, { tasks: AgentTask[]; approvals: Approval[] }>;
 
@@ -68,6 +69,8 @@ export default function FamilyPage() {
       <p className="mt-1.5 text-[15px] leading-relaxed text-[var(--muted)]">
         Permitted updates from each agent. Eleanor controls what caregivers can see.
       </p>
+
+      <MonthlyCareReport />
 
       {/* Filter */}
       <div className="mt-4 flex gap-2 overflow-x-auto scroll-hide pb-1">

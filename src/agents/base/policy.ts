@@ -143,4 +143,9 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   wellnessHouseholdAnalytics: true,
   /** Caregivers may view RAW wellness conversations (off by default — aggregates only). */
   caregiverWellnessRaw: false,
+  // --- Household analytics export (Snowflake monthly family care summary) ---
+  /** Export de-identified medication taken/skipped facts (no drug names or notes). */
+  householdAnalyticsMedication: true,
+  /** Export de-identified assistance-request outcomes (no request text). */
+  householdAnalyticsAssistance: true,
 };
