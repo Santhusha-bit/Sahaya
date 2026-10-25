@@ -162,7 +162,9 @@ describe("Finance agent + Nessie tools", () => {
     const names = (id: "finance" | "care" | "guardian" | "wellness") =>
       createAgent(id, { data, userId: "x" }).tools.map((t) => t.name);
     expect(names("finance")).toEqual(expect.arrayContaining(["connectSandboxBankAccount", "runSpendingAnalysis", "reviewSuggestedAction"]));
-    expect(names("finance").some((n) => /simulate|purchase|transfer|pay/i.test(n))).toBe(false);
+    // The x402 report purchase is approval-only and sandbox-paid; it never touches the bank.
+    const bankLike = names("finance").filter((n) => n !== "purchaseApprovedFinancialReport");
+    expect(bankLike.some((n) => /simulate|purchase|transfer|pay/i.test(n))).toBe(false);
     for (const other of ["care", "guardian", "wellness"] as const) {
       expect(names(other)).not.toContain("runSpendingAnalysis");
       expect(names(other)).not.toContain("fetchBankTransactions");

@@ -152,6 +152,7 @@ planning. Open **Care → 🥕 Pantry** (`/care/pantry`):
 Demo: `npm run demo:pantry` (sandbox), or `npm run demo:pantry -- fridge.jpg` with
 `GEMINI_API_KEY` set for a real vision call. Tests: `tests/pantryNutrition.test.ts`.
 | **Coinbase x402** (Care pays for product data, Base Sepolia test USDC only) | `X402_WALLET_PRIVATE_KEY`+`X402_PAY_TO` set | throwaway key + local signature verifier, nothing settles (`npm run demo:x402`) |
+| **Coinbase x402, Finance reports** (optional experiment: Finance buys benchmark reports, approval required for every purchase) | `FINANCE_X402_REPORTS=on` | off by default; when on, always sandbox, never a funded wallet (`npm run demo:x402-finance`) |
 
 ### Finance spending review (Capital One Nessie)
 

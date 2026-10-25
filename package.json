@@ -39,7 +39,8 @@
     "demo:nessie": "vite-node --config vitest.config.ts scripts/demo-nessie.ts",
     "demo:credit": "vite-node --config vitest.config.ts scripts/demo-credit.ts",
     "demo:finance-case": "vite-node --config vitest.config.ts scripts/demo-finance-case.ts",
-    "demo:investigation": "vite-node --config vitest.config.ts scripts/demo-investigation.ts"
+    "demo:investigation": "vite-node --config vitest.config.ts scripts/demo-investigation.ts",
+    "demo:x402-finance": "vite-node --config vitest.config.ts scripts/demo-x402-finance.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

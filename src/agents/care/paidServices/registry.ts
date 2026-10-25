@@ -11,7 +11,7 @@
 import type { Hex } from "viem";
 import { servicePayTo, TEST_NETWORK } from "@/integrations/x402";
 
-export type PaidServiceCategory = "product-data" | "checkout";
+export type PaidServiceCategory = "product-data" | "financial-data" | "checkout";
 
 /** Categories Care may pay for via x402. Checkout is never one of them. */
 export const PERMITTED_CATEGORIES: readonly PaidServiceCategory[] = ["product-data"];
