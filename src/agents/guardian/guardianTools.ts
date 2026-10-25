@@ -1,5 +1,8 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
+import type { AgentId } from "../base/types";
+import { AGENT_CAPABILITIES } from "../base/workItemPolicy";
+import { getHouseholdCoordinator } from "@/integrations/jira";
 import { getIncidentIndex } from "@/integrations/search";
 import { sendSms, twilioSmsConfigured } from "@/integrations/twilio";
 import { detectSignals } from "./scamSignals";
@@ -309,6 +312,45 @@ export const guardianTools: AgentTool[] = [
           requests: filtered.map((a) => ({ id: a.id, need: a.data.need, status: a.data.status })),
           helpers: helpers.map((h) => ({ helper: h.data.helper, when: h.data.when, status: h.data.status })),
         },
+      };
+    },
+  },
+  {
+    name: "delegateToAgent",
+    description:
+      "Hand a sensitive action that another agent owns (e.g. Finance paying an invoice, freezing a card, or filing a dispute) to that agent as a reviewable work item. It does NOT execute anything: a registered family reviewer must approve first, and the assigned agent can only run exactly what was approved. Code policy decides whether the delegation is allowed.",
+    inputSchema: z.object({
+      assignedAgent: z.enum(["finance", "care"]),
+      toolName: z.enum(["executePayment", "freezeCard", "fileBillingDispute"]),
+      requestedAction: z.string().min(1).max(240).describe("One line a family reviewer will read."),
+      input: z.record(z.unknown()).describe("Exact parameters to approve, e.g. { amount, payee, invoiceId }."),
+    }),
+    async execute(input, ctx) {
+      const { service, backend } = getHouseholdCoordinator(ctx.userId);
+      const scope = AGENT_CAPABILITIES[input.assignedAgent as AgentId]?.find((c) => c.toolName === input.toolName)?.scope ?? "unknown";
+      const item = await service.propose({
+        userId: ctx.userId,
+        requestedAction: input.requestedAction,
+        toolName: input.toolName,
+        requestingAgent: ctx.agentId,
+        assignedAgent: input.assignedAgent as AgentId,
+        permissionScope: scope,
+        input: input.input,
+      });
+      await ctx.audit.record({
+        actor: ctx.agentId,
+        action: item.status === "rejected" ? "work_item.delegation_denied" : "work_item.delegation_proposed",
+        correlationId: ctx.correlationId,
+        detail: { workItemId: item.id, assignedAgent: input.assignedAgent, toolName: input.toolName },
+      });
+      if (item.status === "rejected") {
+        const reason = item.history.find((e) => e.action === "delegation_denied")?.detail;
+        return { ok: false, summary: `That hand-off isn't allowed: ${reason}`, error: "delegation_denied", data: { workItemId: item.id } };
+      }
+      return {
+        ok: true,
+        summary: `I've asked ${input.assignedAgent} to handle this, pending approval from ${item.requiredApprovals} family caregiver(s)${backend === "jira" ? ` (Jira ${item.externalKey ?? "sync pending"})` : ""}. Nothing happens until they approve.`,
+        data: { workItemId: item.id, status: item.status, riskTier: item.riskTier, requiredApprovals: item.requiredApprovals, externalKey: item.externalKey, reviewBackend: backend },
       };
     },
   },

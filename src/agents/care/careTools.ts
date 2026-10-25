@@ -277,7 +277,6 @@ export const careTools: AgentTool[] = [
           requestingAgent: "care",
           assignedAgent: "care",
           permissionScope: "care:order",
-          requiredRole: "caregiver",
           input: { cartId: input.cartId, orderId: order.id, total },
         });
         reviewBackend = backend;
