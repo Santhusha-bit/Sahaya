@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
+import type { ToolContext } from "../base/types";
+import { getHouseholdCoordinator } from "@/integrations/jira";
 import { createWorkItemStore } from "@/integrations/jira";
 import { createFinanceAssistanceBridge, requestFinancialAssistance } from "@/integrations/fetchai";
 import { getDataLayer } from "../base/dataLayer";
@@ -159,7 +161,6 @@ export const financeTools: AgentTool[] = [
           requestingAgent: "finance",
           assignedAgent: "finance",
           permissionScope: "finance:commit-money",
-          requiredRole: "caregiver",
           input,
         });
         workItemId = wi.id;
@@ -276,4 +277,45 @@ export const financeTools: AgentTool[] = [
       };
     },
   },
+  {
+    name: "executeDelegatedWorkItem",
+    description:
+      "Carry out a work item another agent assigned to Finance (e.g. a payment Guardian flagged), but only if the execution gate confirms it was approved by the required family reviewers for exactly these parameters. Refusals are explained, never retried around.",
+    inputSchema: z.object({ workItemId: z.string().min(1) }),
+    async execute(input, ctx) {
+      const { service } = getHouseholdCoordinator(ctx.userId);
+      const item = await service.get(input.workItemId);
+      if (!item || item.userId !== ctx.userId) return { ok: false, summary: "I couldn't find that work item.", error: "not_found" };
+      const run = DELEGATED_EXECUTORS[item.toolName];
+      if (!run) return { ok: false, summary: `I don't know how to run "${item.toolName}".`, error: "no_executor" };
+      // Execute what the item holds; the gate re-hashes it, so a store-level edit
+      // of the parameters after approval is caught as input_tampered.
+      const res = await service.execute(item.id, { agentId: ctx.agentId, toolName: item.toolName, input: item.input }, (wi) => run(wi.input as Record<string, unknown>, ctx));
+      await ctx.audit.record({
+        actor: ctx.agentId,
+        action: res.ok ? "work_item.executed" : "work_item.execution_denied",
+        correlationId: ctx.correlationId,
+        detail: { workItemId: item.id, gate: res.gate.code ?? "ok" },
+      });
+      return res.ok
+        ? { ok: true, summary: res.result ?? "Done.", data: { workItemId: item.id, status: "executed" } }
+        : { ok: false, summary: `Not executed: ${res.gate.reason}`, error: res.gate.code, data: { workItemId: item.id } };
+    },
+  },
 ];
+
+/** Side effects for approved, delegated finance work items (sandbox: recorded in Finance memory). */
+const DELEGATED_EXECUTORS: Record<string, (input: Record<string, unknown>, ctx: ToolContext) => Promise<string>> = {
+  async executePayment(input, ctx) {
+    const rec = await ctx.memory.save("payments", { ...input, status: "sent", mode: "sandbox" }, { tags: ["financial-action"] });
+    return `Paid $${Number(input.amount).toFixed(2)} to ${String(input.payee ?? "payee")} (payment ${rec.id}).`;
+  },
+  async freezeCard(input, ctx) {
+    const rec = await ctx.memory.save("cardActions", { ...input, status: "frozen", mode: "sandbox" }, { tags: ["financial-action"] });
+    return `Card ending ${String(input.last4 ?? "????")} frozen (${rec.id}).`;
+  },
+  async fileBillingDispute(input, ctx) {
+    const rec = await ctx.memory.save("disputes", { ...input, status: "filed", mode: "sandbox" }, { tags: ["financial-action"] });
+    return `Dispute filed with ${String(input.merchant ?? "merchant")} (${rec.id}).`;
+  },
+};

@@ -1,85 +1,120 @@
 /**
  * npm run demo:approval
  *
- * Controlled agent actions: Finance proposes a $2,000 payment, it becomes a
- * reviewable work item, a caregiver approves it, and only then does it execute
- * through the code gate. Also shows the gate refusing a tampered replay. The
- * history view prints the full audit trail. Sandbox store unless Jira creds exist.
+ * Agent security + coordination, end to end through the real agents:
+ *   1. Guardian identifies a task that needs Finance (paying a $1,800 invoice
+ *      to a new home-care payee) and delegates it as a work item.
+ *   2. Policy authorizes the delegation, sets the risk tier (dual control) and
+ *      mirrors the item to Jira when ATLASSIAN_* creds are present.
+ *   3. Attacks the gate must stop: early execution, a neighbor approving,
+ *      Guardian self-assigning, a forged audit event, edited parameters.
+ *   4. Two caregivers approve; Finance executes exactly once; replay refused.
+ *   5. The hash-chained audit trail is printed and verified.
  */
 
 import { jiraStatus } from "@/lib/env";
-import { createWorkItemStore } from "@/integrations/jira";
+import { getHouseholdCoordinator } from "@/integrations/jira";
+import { AgentService } from "@/agents/service";
+import { verifyHistory } from "@/agents/base/workItems";
 
-function line(c = "─") {
-  console.log(c.repeat(68));
-}
+const USER = "demo-margaret";
+const line = (c = "─") => console.log(c.repeat(72));
+const verdict = (ok: boolean, expectOk: boolean) => (ok === expectOk ? "✓" : "✗ UNEXPECTED");
 
 async function main() {
-  const { service, backend } = createWorkItemStore();
-  const USER = "demo-margaret";
+  const coord = getHouseholdCoordinator(USER);
+  const items = coord.service;
+  const agents = await AgentService.forUser(USER);
+  const checks: boolean[] = [];
+  const check = (label: string, ok: boolean, expectOk: boolean, detail?: string) => {
+    checks.push(ok === expectOk);
+    console.log(`  ${verdict(ok, expectOk)} ${label}${detail ? `: ${detail}` : ""}`);
+  };
 
   line("═");
-  console.log(`KINLINE — Controlled agent actions demo (work-item store: ${backend})`);
-  console.log(`Jira integration: ${jiraStatus().mode} — ${jiraStatus().detail}`);
+  console.log(`SAHAYA: agent security & coordination (work-item backend: ${coord.backend})`);
+  console.log(`Jira: ${jiraStatus().mode}. ${jiraStatus().detail}`);
   line("═");
 
-  const input = { amount: 2000, merchant: "Acme Home Care", orderId: "ord_2026_1021" };
-  const item = await service.propose({
-    userId: USER,
-    requestedAction: "Pay $2,000 to Acme Home Care (monthly care invoice)",
-    toolName: "executePayment",
-    requestingAgent: "finance",
+  const input = { amount: 1800, payee: "Sunrise Home Care", invoiceId: "INV-1042" };
+
+  console.log("\n1. Guardian delegates the payment to Finance");
+  const { record: proposal } = await agents.runTool("guardian", "delegateToAgent", {
     assignedAgent: "finance",
-    permissionScope: "finance:payment",
-    requiredRole: "caregiver",
+    toolName: "executePayment",
+    requestedAction: "Pay $1,800 Sunrise Home Care invoice INV-1042 (new payee, verified by callback)",
     input,
   });
-  console.log(`\nFinance proposed work item ${item.id} — status: ${item.status}`);
+  console.log(`  Guardian: ${proposal.summary}`);
+  const workItemId = (proposal.output as { workItemId: string }).workItemId;
+  const item = (await items.get(workItemId))!;
+  console.log(`  Work item ${item.id}: tier=${item.riskTier}, needs ${item.requiredApprovals}x ${item.requiredRole}${item.externalKey ? `, Jira ${item.externalKey}` : ""}`);
 
-  // 1. Try to execute before approval — must be refused.
-  const early = await service.execute(item.id, { agentId: "finance", toolName: "executePayment", input }, async () => "PAID");
-  console.log(`\nExecute before approval: ${early.ok ? "RAN (bug!)" : "refused"} — ${early.gate.reason}`);
+  console.log("\n2. Attempts the gate must refuse");
+  const selfAssign = await agents.runTool("guardian", "delegateToAgent", {
+    assignedAgent: "care",
+    toolName: "executePayment",
+    requestedAction: "Care pays the invoice instead",
+    input,
+  });
+  check("Guardian routes a payment to Care (no capability)", selfAssign.record.status === "success", false, selfAssign.record.summary);
 
-  // 2. Wrong reviewer role tries to approve — the gate still refuses execution.
-  await service.approve(item.id, { reviewer: "Nosy Neighbor", reviewerRole: "neighbor" });
-  const badRole = await service.execute(item.id, { agentId: "finance", toolName: "executePayment", input }, async () => "PAID");
-  console.log(`Execute with neighbor approval: ${badRole.ok ? "RAN (bug!)" : "refused"} — ${badRole.gate.reason}`);
+  const early = await agents.runTool("finance", "executeDelegatedWorkItem", { workItemId });
+  check("Finance executes before approval", early.record.status === "success", false, early.record.summary);
 
-  // 3. Caregiver approves with the required role.
-  await service.approve(item.id, { reviewer: "Sarah (daughter)", reviewerRole: "caregiver", ttlMs: 15 * 60_000 });
-  console.log(`\nCaregiver 'Sarah' approved the work item.`);
+  const neighbor = await items.approve(workItemId, { reviewerId: "neighbor" });
+  check("Neighbor approves", neighbor.ok, false, neighbor.reason);
 
-  // 4. Tampered amount is rejected by the input-hash check.
-  const tampered = await service.execute(
-    item.id,
-    { agentId: "finance", toolName: "executePayment", input: { ...input, amount: 5000 } },
-    async () => "PAID",
-  );
-  console.log(`Execute with tampered amount ($5,000): ${tampered.ok ? "RAN (bug!)" : "refused"} — ${tampered.gate.reason}`);
+  const agentApprove = await items.approve(workItemId, { reviewerId: "guardian" });
+  check("Guardian approves its own request", agentApprove.ok, false, agentApprove.reason);
 
-  // 5. The genuine, approved execution runs — once.
-  const ok = await service.execute(
-    item.id,
-    { agentId: "finance", toolName: "executePayment", input },
-    async (wi) => `Paid $${(wi.input as any).amount} to ${(wi.input as any).merchant}`,
-  );
-  console.log(`\nApproved execution: ${ok.ok ? "SUCCESS" : "refused"} — ${ok.result ?? ok.gate.reason}`);
+  console.log("\n3. Family review (dual control)");
+  const sarah = await items.approve(workItemId, { reviewerId: "sarah" });
+  check("Sarah (caregiver) approves", sarah.ok, true, `status ${sarah.item?.status}`);
+  const half = await agents.runTool("finance", "executeDelegatedWorkItem", { workItemId });
+  check("Finance executes with 1 of 2 approvals", half.record.status === "success", false, half.record.summary);
+  const sarahAgain = await items.approve(workItemId, { reviewerId: "sarah" });
+  check("Sarah approves a second time", sarahAgain.ok, false, sarahAgain.reason);
+  const david = await items.approve(workItemId, { reviewerId: "david" });
+  check("David (caregiver) approves", david.ok, true, `status ${david.item?.status}`);
 
-  // 6. Replay is refused (single-use).
-  const replay = await service.execute(item.id, { agentId: "finance", toolName: "executePayment", input }, async () => "PAID AGAIN");
-  console.log(`Replay the same approval: ${replay.ok ? "RAN (bug!)" : "refused"} — ${replay.gate.reason}`);
+  if (coord.syncFromJira) {
+    const sync = await coord.syncFromJira(workItemId);
+    console.log(`  Jira sync: ${sync.applied} applied, ${sync.ignored} ignored${sync.error ? ` (${sync.error})` : ""}`);
+  }
+
+  console.log("\n4. Execution");
+  const done = await agents.runTool("finance", "executeDelegatedWorkItem", { workItemId });
+  check("Finance executes the approved payment", done.record.status === "success", true, done.record.summary);
+  const replay = await agents.runTool("finance", "executeDelegatedWorkItem", { workItemId });
+  check("Replay the same approval", replay.record.status === "success", false, replay.record.summary);
+
+  console.log("\n5. A second item: tampering after approval");
+  const { record: p2 } = await agents.runTool("guardian", "delegateToAgent", {
+    assignedAgent: "finance",
+    toolName: "freezeCard",
+    requestedAction: "Freeze card ending 4417 after suspicious charge",
+    input: { last4: "4417", reason: "suspicious charge" },
+  });
+  const id2 = (p2.output as { workItemId: string }).workItemId;
+  await items.approve(id2, { reviewerId: "sarah" });
+  const stored = (await items.get(id2))!;
+  // Simulate someone editing the audit log in the database to hide who approved.
+  const forged = stored.history.map((e) => (e.action === "approved" ? { ...e, actor: "david" } : e));
+  await (items as unknown as { store: { patch: (id: string, p: object) => Promise<unknown> } }).store.patch(id2, { history: forged });
+  const t = await agents.runTool("finance", "executeDelegatedWorkItem", { workItemId: id2 });
+  check("Execute after audit log was edited", t.record.status === "success", false, t.record.summary);
 
   line();
-  console.log("Work item history:");
-  const finalItem = await service.get(item.id);
-  for (const e of finalItem?.history ?? []) {
-    console.log(`  [${e.actor}] ${e.action}${e.detail ? `: ${e.detail}` : ""}`);
+  const final = (await items.get(workItemId))!;
+  console.log(`Audit trail for ${final.id} (${final.status}, chain ${verifyHistory(final.history) === -1 ? "intact" : "BROKEN"}):`);
+  for (const e of final.history) {
+    console.log(`  ${e.hash?.slice(0, 8)}  [${e.actor}] ${e.action}${e.detail ? `: ${e.detail}` : ""}`);
   }
 
   line("═");
-  const pass =
-    !early.ok && !badRole.ok && !tampered.ok && ok.ok && !replay.ok && finalItem?.status === "executed";
-  console.log(pass ? "✓ Gate enforced: only the valid, approved, untampered, single-use execution ran." : "✗ Gate FAILED.");
+  const pass = checks.every(Boolean) && final.status === "executed";
+  console.log(pass ? `✓ All ${checks.length} checks behaved as enforced by code.` : "✗ Enforcement FAILED.");
   line("═");
   if (!pass) process.exit(1);
 }

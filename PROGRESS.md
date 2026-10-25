@@ -75,6 +75,33 @@ NOTE: the live Jira path is unverified (no Atlassian credentials supplied); it i
 written against Jira Cloud REST API v3 and guarded so it never affects the local
 gate. Falls back to the fully-tested sandbox store.
 
+### Track 3b: Agent security & coordination (Atlassian) ✅ done
+End-to-end: Guardian identifies a task another agent owns, delegates it as a work
+item, authorized family reviewers approve, Finance executes only through the gate,
+and the result plus a tamper-evident trail sync back (Jira when configured).
+- `src/agents/base/workItemPolicy.ts` (PURE): agent capability matrix (who can
+  execute which tool/scope), delegation matrix (who may assign what to whom),
+  risk tiers (payments >= $1,000 need 2 distinct caregivers), and a
+  `ReviewerDirectory` (roles resolved server-side per household, optional Jira
+  accountId binding via `ATLASSIAN_REVIEWER_ACCOUNTS="sarah=<id>,david=<id>"`).
+- `workItems.ts` additions: per-approval records bound to the input hash and
+  expiry; separation of duties (agents, unregistered people, other households and
+  duplicate approvers are refused); hash-chained history (`appendEvent`,
+  `verifyHistory`); gate also refuses `audit_tampered`, `unbacked_approval`
+  (approval with no chained event) and `insufficient_approvals`; approval consumed
+  before the executor runs; `applyExternalDecision` accepts a Jira transition only
+  from a bound reviewer account (else `external_decision_ignored`), idempotent.
+- `jira.ts`: `/search` -> `/search/jql` (410 fix), changelog pull
+  (`fetchDecisions`, statuses via `ATLASSIAN_APPROVE_STATUSES` /
+  `ATLASSIAN_REJECT_STATUSES`, default Approved,Done / Rejected,Declined,Won't Do),
+  Jira comments carry the audit-chain head, process-wide coordinator singleton.
+- Tools: Guardian `delegateToAgent`, Finance `executeDelegatedWorkItem`.
+- UI: `/approvals` (linked from Activity) + `GET/POST /api/work-items`.
+- Tests: `tests/workItems.test.ts` (27). Demo: `npm run demo:approval` (11 checks).
+- Limits: sandbox store is in-memory per server process (not shared across
+  serverless instances); reviewer identities are sandbox demo identities until
+  Auth0 sessions back the directory. Live Jira two-way sync unverified here.
+
 ## Track 4 — Elastic incident search ✅ done
 - `src/integrations/search.ts` — `IncidentSearchIndex` interface; `InMemorySearchIndex`
   (sandbox, keyword overlap + risk boost) and `ElasticSearchIndex` (live, REST) behind
