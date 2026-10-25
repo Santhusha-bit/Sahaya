@@ -35,9 +35,13 @@ export class WellnessAgent extends BaseAgent {
   protected async sandboxPlan(message: string, _ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
     if (/unsafe|threat|scared|someone is|pressuring|fell|hurt myself|danger/.test(m)) {
+      const reply = "That sounds frightening, and your safety matters most. I'm going to let Guardian help with this right away.";
       return {
-        reply: "That sounds frightening, and your safety matters most. I'm going to let Guardian help with this right away.",
-        toolCalls: [{ name: "escalateSafetyToGuardian", input: { summary: message, severity: "high" } }],
+        reply,
+        toolCalls: [
+          { name: "escalateSafetyToGuardian", input: { summary: message, severity: "high" } },
+          { name: "speakWellnessReply", input: { text: reply } },
+        ],
       };
     }
     if (/no ?one to help|nobody to help|don'?t have anyone|no one can help|help me get groceries|need someone to/.test(m)) {
@@ -53,19 +57,22 @@ export class WellnessAgent extends BaseAgent {
       };
     }
     const valence = /lonely|sad|can'?t sleep|pain|not eating|alone/.test(m) ? "negative" : /good|happy|lovely|enjoyed|visit/.test(m) ? "positive" : "neutral";
+    const reply =
+      valence === "negative"
+        ? "I'm really glad you told me. I'm here with you. Let's sit with that for a moment, what's been the hardest part?"
+        : valence === "positive"
+          ? "That's wonderful to hear. Tell me more, what made it special?"
+          : "I'm listening. Tell me more about your day.";
     return {
-      reply:
-        valence === "negative"
-          ? "I'm really glad you told me. I'm here with you. Let's sit with that for a moment — what's been the hardest part?"
-          : valence === "positive"
-            ? "That's wonderful to hear. Tell me more — what made it special?"
-            : "I'm listening. Tell me more about your day.",
+      reply,
       toolCalls: [
         { name: "startConversationalCheckIn", input: {} },
         // The full pipeline: Bitdeer extraction -> policy -> Convex -> Moss ->
         // Backboard -> Tiger Data -> trend -> contextual follow-up.
         { name: "processWellnessConversation", input: { text: message } },
         { name: "saveWellnessMemory", input: { note: message.slice(0, 200), category: "mood", valence } },
+        // Speak the reply aloud (Cartesia when configured, else browser speech).
+        { name: "speakWellnessReply", input: { text: reply } },
       ],
     };
   }
