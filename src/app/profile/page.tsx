@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { IntegrationStatus } from "@/lib/env";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface StatusResponse {
   user: { name: string; role: string; authMode: string };
@@ -59,6 +60,7 @@ export default function ProfilePage() {
           return (
             <div key={i.key} className={`card fade-up stagger-${Math.min(idx + 1, 4)} p-3.5`}>
               <div className="flex items-center gap-2">
+                <BrandLogo brandKey={i.key} label={i.label} />
                 <div className="text-[15px] font-bold tracking-tight">{i.label}</div>
                 <span className="pill ml-auto px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide" style={{ background: s.bg, color: s.color }}>
                   {i.mode}

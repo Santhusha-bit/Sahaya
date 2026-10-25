@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { IntegrationStatus } from "@/lib/env";
+import { BrandLogo } from "@/components/BrandLogo";
 
 /** ---- Types mirrored from the dashboard API ---- */
 interface Observation {
@@ -245,6 +246,7 @@ export default function WellnessDashboardPage() {
           return (
             <div key={i.key} className="card p-3">
               <div className="flex items-center gap-2">
+                <BrandLogo brandKey={i.key} label={i.label} size={24} />
                 <div className="text-[14px] font-bold">{i.label}</div>
                 <span className="pill ml-auto px-2 py-0.5 text-[10px] font-bold uppercase" style={{ background: s.bg, color: s.color }}>{i.mode}</span>
               </div>
