@@ -75,30 +75,62 @@ export function createCaptionRecognizer(opts: {
   };
 }
 
-/** Speak text: Cartesia via /api/voice when configured, else browser synth. */
-export async function speak(text: string): Promise<"cartesia" | "browser" | "none"> {
+export type VoicePersona = "guardian" | "scam-caller";
+
+/** Fetch Cartesia MP3 bytes for a line, or null when Cartesia isn't configured. */
+export async function fetchSpeechAudio(text: string, persona?: VoicePersona): Promise<ArrayBuffer | null> {
   try {
     const res = await fetch("/api/voice", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, persona }),
     });
-    if (res.status === 200) {
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      await audio.play().catch(() => {});
-      audio.onended = () => URL.revokeObjectURL(url);
-      return "cartesia";
-    }
+    return res.status === 200 ? await res.arrayBuffer() : null;
   } catch {
-    /* fall through to browser */
+    return null;
   }
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+}
+
+/** Browser SpeechSynthesis; resolves when the utterance finishes. */
+export function speakWithBrowser(text: string, opts: { rate?: number; pitch?: number } = {}): Promise<void> {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return Promise.resolve();
+  return new Promise((resolve) => {
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.98;
+    u.rate = opts.rate ?? 0.98;
+    if (opts.pitch) u.pitch = opts.pitch;
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
+  });
+}
+
+/**
+ * Speak text: Cartesia via /api/voice when configured, else browser synth.
+ * With `wait`, resolves only after playback ends (used to pace the demo call).
+ */
+export async function speak(
+  text: string,
+  opts: { persona?: VoicePersona; wait?: boolean } = {},
+): Promise<"cartesia" | "browser" | "none"> {
+  const audioBytes = await fetchSpeechAudio(text, opts.persona);
+  if (audioBytes) {
+    const url = URL.createObjectURL(new Blob([audioBytes], { type: "audio/mpeg" }));
+    const audio = new Audio(url);
+    const ended = new Promise<void>((resolve) => {
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+    }).finally(() => URL.revokeObjectURL(url));
+    const played = await audio.play().then(
+      () => true,
+      () => false,
+    );
+    if (opts.wait && played) await ended;
+    return "cartesia";
+  }
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    const done = speakWithBrowser(text);
+    if (opts.wait) await done;
     return "browser";
   }
   return "none";

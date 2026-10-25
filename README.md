@@ -28,6 +28,20 @@ npm test                     # isolation + cross-agent permission tests
 deterministic per-agent planner drives the *same* real tools, approvals, memory and
 event bus — so every workflow is demonstrable offline. Add keys to go live.
 
+### Scam-call demo (Cartesia voice)
+
+- **In the app:** open `/call` and press **Play demo scam call**. A Cartesia voice
+  plays a fictional "grandson" asking for gift cards; Cartesia streaming STT
+  (ink-whisper) transcribes that audio in the browser; Claude + the deterministic
+  rules screen it; Guardian warns you privately in its own Cartesia voice and logs
+  an incident. Real two-person calls work the same way: the protected person's
+  browser transcribes the caller's incoming WebRTC audio with Cartesia, so the
+  caller needs no special browser. Browsers only get a short-lived, STT-only
+  token from `/api/voice/stt-token`; the API key stays on the server.
+- **Headless:** `npm run demo:scam-call` runs the same loop in Node (Cartesia TTS ->
+  Cartesia STT -> screening -> Guardian) and saves the caller and warning audio to
+  your temp folder. Twilio is disabled for the run, so alerts stay in-app.
+
 ## Architecture
 
 ```
@@ -80,7 +94,7 @@ Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
 |---|---|---|
 | **Claude** (`claude-opus-4-8`, adaptive thinking, tool use) | `ANTHROPIC_API_KEY` set | deterministic sandbox planner |
 | **Convex** (primary backend / event store) | `NEXT_PUBLIC_CONVEX_URL` set | in-process store |
-| **Cartesia** (voice TTS) | `CARTESIA_API_KEY` set | browser SpeechSynthesis |
+| **Cartesia** (sonic-3 TTS + ink-whisper STT) | `CARTESIA_API_KEY` set | browser SpeechSynthesis / SpeechRecognition |
 | **Auth0** | `AUTH0_DOMAIN`+`AUTH0_CLIENT_ID` set | single demo user |
 | **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
 

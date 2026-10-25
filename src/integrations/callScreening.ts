@@ -119,6 +119,8 @@ export async function screenCallTranscript(opts: {
   transcript: string;
   /** Injectable for tests; defaults to Claude when ANTHROPIC_API_KEY is set. */
   assess?: (transcript: string) => Promise<ClaudeCallAssessment | null>;
+  /** Injectable for demos/tests; defaults to the process-wide service for userId. */
+  service?: AgentService;
 }): Promise<CallScreenResult> {
   const transcript = opts.transcript.trim().slice(-MAX_TRANSCRIPT_CHARS);
   const rules = detectSignals(transcript);
@@ -158,7 +160,7 @@ export async function screenCallTranscript(opts: {
 
   if (verdict === "scam" && !escalatedCalls.has(opts.callId)) {
     escalatedCalls.add(opts.callId);
-    const service = await AgentService.forUser(opts.userId);
+    const service = opts.service ?? (await AgentService.forUser(opts.userId));
     const { record } = await service.runTool("guardian", "screenInboundMessage", {
       content: transcript,
       channel: "phone",
