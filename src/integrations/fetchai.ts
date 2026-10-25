@@ -1,19 +1,25 @@
 /**
- * Agent-to-agent messaging bridge (Track 5).
+ * Agent-to-agent messaging over Fetch.ai uAgents.
  *
- * The TypeScript agents stay authoritative. A thin bridge carries ONE declared
- * cross-agent event (wellness -> guardian "assistance.request") as a typed
- * message. Live mode posts to the Python uAgents service (services/uagents) over
- * local HTTP; sandbox mode runs the exact same exchange over the in-process event
- * bus. Only declared bus events may cross, with the same schema + consent checks.
- * The minimum data crosses (need, urgency, consent ref) — never a conversation.
+ * The TypeScript agents stay authoritative. Wellness, Care and Finance each have
+ * their OWN Python uAgent (services/uagents/requester_agent.py), and Guardian has
+ * one too (guardian_agent.py); each runs as a separate process with its own
+ * identity. A request travels:
  *
- * Honesty (global rule 1): without a reachable Python bridge, the capability runs
- * in-process and is labeled "sandbox (in-process bus)", never "Fetch.ai".
+ *   TS Wellness --POST /assistance--> wellness uAgent --signed envelope--> guardian uAgent
+ *     --POST {GUARDIAN_AGENT_URL}/assistance--> TS Guardian (acceptAssistanceAtGuardian)
+ *   and the task id + status ride the same path back.
+ *
+ * Sandbox mode (no uAgent URL configured) runs the identical exchange in-process:
+ * same request schema, same Guardian intake, same bus policy + consent checks.
+ * Only the minimum data crosses (need, urgency, consent ref), never a conversation.
+ *
+ * Honesty (global rule 1): without a reachable uAgent, the capability is labeled
+ * "sandbox (in-process bus)", never "Fetch.ai". A live bridge that cannot be
+ * reached is reported as a rejection, not silently swapped for the sandbox.
  */
 
 import { z } from "zod";
-import { fetchaiStatus } from "@/lib/env";
 import { id } from "@/lib/id";
 import { AgentEventBus } from "@/agents/base/AgentEventBus";
 import { AuditLog } from "@/agents/base/audit";
@@ -22,22 +28,42 @@ import { getDataLayer } from "@/agents/base/dataLayer";
 import { createAgent } from "@/agents/registry";
 import type { DataLayer } from "@/agents/base/types";
 
-export const AssistanceRequestSchema = z.object({
+export const REQUESTER_AGENTS = ["wellness", "care", "finance"] as const;
+export type RequesterAgent = (typeof REQUESTER_AGENTS)[number];
+
+/** Wire contract; mirrors services/uagents/messages.py. */
+export const BridgedAssistanceRequestSchema = z.object({
   request_id: z.string().min(1),
-  from_agent: z.literal("wellness"),
+  from_agent: z.enum(REQUESTER_AGENTS),
   to_agent: z.literal("guardian"),
   user_id: z.string().min(1),
   need: z.string().min(1).max(300),
   consent_ref: z.string().min(1).max(80),
   urgency: z.enum(["routine", "soon", "urgent"]),
 });
+export type BridgedAssistanceRequest = z.infer<typeof BridgedAssistanceRequestSchema>;
+
+export const AssistanceRequestSchema = BridgedAssistanceRequestSchema.extend({ from_agent: z.literal("wellness") });
 export type AssistanceRequest = z.infer<typeof AssistanceRequestSchema>;
+
+export const FinanceAssistanceRequestSchema = BridgedAssistanceRequestSchema.extend({ from_agent: z.literal("finance") });
+export type FinanceAssistanceRequest = z.infer<typeof FinanceAssistanceRequestSchema>;
+
+const schemaFor: Record<RequesterAgent, z.ZodType<BridgedAssistanceRequest>> = {
+  wellness: AssistanceRequestSchema,
+  care: BridgedAssistanceRequestSchema.extend({ from_agent: z.literal("care") }),
+  finance: FinanceAssistanceRequestSchema,
+};
 
 export const AssistanceResponseSchema = z.object({
   request_id: z.string(),
   task_id: z.string(),
   status: z.enum(["accepted", "rejected"]),
   reason: z.string().optional(),
+  /** Guardian's task state, e.g. "in_progress". */
+  task_status: z.string().optional(),
+  /** uAgent address of the Guardian that handled it (live mode only). */
+  coordinator: z.string().optional(),
 });
 export type AssistanceResponse = z.infer<typeof AssistanceResponseSchema>;
 
@@ -45,247 +71,172 @@ export interface AssistanceBridge {
   readonly backend: "fetchai" | "sandbox";
   send(req: unknown): Promise<AssistanceResponse>;
 }
+export type FinanceAssistanceBridge = AssistanceBridge;
 
 function requestId(raw: unknown): string {
   return typeof raw === "object" && raw && "request_id" in raw ? String((raw as any).request_id || "unknown") : "unknown";
 }
 
+function rejected(request_id: string, reason: string): AssistanceResponse {
+  return { request_id, task_id: "", status: "rejected", reason };
+}
+
+function schemaIssues(err: z.ZodError): string {
+  return err.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ");
+}
+
 /**
- * In-process realization: validates the typed message, maps it to the declared
- * bus event, runs the bus checks, then has Guardian accept and coordinate help.
+ * Guardian's intake for a bridged assistance request. Used by the in-process
+ * sandbox AND by the HTTP endpoint the Guardian uAgent calls in live mode, so
+ * both paths get the same schema, bus policy, consent and audit checks.
  */
+export async function acceptAssistanceAtGuardian(
+  data: DataLayer,
+  raw: unknown,
+  consent: ConsentSettings = DEFAULT_CONSENT,
+): Promise<AssistanceResponse> {
+  const parsed = BridgedAssistanceRequestSchema.safeParse(raw);
+  if (!parsed.success) return rejected(requestId(raw), `invalid_request_schema: ${schemaIssues(parsed.error)}`);
+  const req = parsed.data;
+  const audit = new AuditLog(data.memory, req.user_id);
+  await audit.record({
+    actor: "guardian",
+    action: "assistance.request.received",
+    correlationId: req.request_id,
+    detail: { from: req.from_agent, need: req.need, urgency: req.urgency },
+  });
+
+  // Only a declared event crosses, with the same bus validation + consent.
+  const bus = new AgentEventBus(data.events, consent);
+  const pub = await bus.publish({
+    sourceAgent: req.from_agent,
+    targetAgent: "guardian",
+    type: "assistance.request",
+    userId: req.user_id,
+    correlationId: req.request_id,
+    payload: { need: req.need, urgency: req.urgency, consentRef: req.consent_ref },
+  });
+  if (!pub.ok) return rejected(req.request_id, pub.reason ?? "blocked_by_policy");
+
+  // Guardian accepts and starts helper coordination.
+  const guardian = createAgent("guardian", { data, userId: req.user_id, consent });
+  await guardian.initialize();
+  const task = await guardian.handleEvent(pub.event);
+  await bus.markCompleted(pub.event.id, `accepted via bridge from ${req.from_agent}`);
+
+  const response: AssistanceResponse = {
+    request_id: req.request_id,
+    task_id: task?.id ?? "",
+    status: "accepted",
+    task_status: task?.status,
+  };
+  await audit.record({
+    actor: "guardian",
+    action: "assistance.response.sent",
+    correlationId: req.request_id,
+    detail: { to: req.from_agent, task_id: response.task_id, status: response.status },
+  });
+  return response;
+}
+
+/** In-process realization: same contract and Guardian intake, no network. */
 export class SandboxBridge implements AssistanceBridge {
   readonly backend = "sandbox" as const;
   constructor(
     private readonly data: DataLayer,
     private readonly consent: ConsentSettings = DEFAULT_CONSENT,
+    private readonly from: RequesterAgent = "wellness",
   ) {}
 
   async send(raw: unknown): Promise<AssistanceResponse> {
-    const audit = new AuditLog(this.data.memory, requestId(raw));
-    const parsed = AssistanceRequestSchema.safeParse(raw);
-    if (!parsed.success) {
-      return {
-        request_id: requestId(raw),
-        task_id: "",
-        status: "rejected",
-        reason: `invalid_request_schema: ${parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`,
-      };
-    }
-    const req = parsed.data;
-    await new AuditLog(this.data.memory, req.user_id).record({
-      actor: "bridge:wellness",
+    const parsed = schemaFor[this.from].safeParse(raw);
+    if (!parsed.success) return rejected(requestId(raw), `invalid_request_schema: ${schemaIssues(parsed.error)}`);
+    await new AuditLog(this.data.memory, parsed.data.user_id).record({
+      actor: `bridge:${this.from}`,
       action: "assistance.request.sent",
-      correlationId: req.request_id,
-      detail: { need: req.need, urgency: req.urgency },
+      correlationId: parsed.data.request_id,
+      detail: { need: parsed.data.need, urgency: parsed.data.urgency },
     });
-
-    // Only the declared event crosses, with the same bus validation + consent.
-    const bus = new AgentEventBus(this.data.events, this.consent);
-    const pub = await bus.publish({
-      sourceAgent: "wellness",
-      targetAgent: "guardian",
-      type: "assistance.request",
-      userId: req.user_id,
-      correlationId: req.request_id,
-      payload: { need: req.need, urgency: req.urgency, consentRef: req.consent_ref },
-    });
-    if (!pub.ok) {
-      return { request_id: req.request_id, task_id: "", status: "rejected", reason: pub.reason };
-    }
-
-    // Guardian accepts and starts helper coordination.
-    const guardian = createAgent("guardian", { data: this.data, userId: req.user_id, consent: this.consent });
-    await guardian.initialize();
-    const task = await guardian.handleEvent(pub.event);
-    await bus.markCompleted(pub.event.id, "accepted via bridge");
-
-    const response: AssistanceResponse = {
-      request_id: req.request_id,
-      task_id: task?.id ?? "",
-      status: "accepted",
-    };
-    await new AuditLog(this.data.memory, req.user_id).record({
-      actor: "bridge:guardian",
-      action: "assistance.response.sent",
-      correlationId: req.request_id,
-      detail: { task_id: response.task_id, status: response.status },
-    });
-    void audit;
-    return response;
+    return acceptAssistanceAtGuardian(this.data, parsed.data, this.consent);
   }
 }
 
-/** Live uAgents bridge: posts the typed message to the Python service. */
+/** Live: posts the typed request to this agent's own uAgent, which messages Guardian's uAgent. */
 export class FetchAIBridge implements AssistanceBridge {
   readonly backend = "fetchai" as const;
-  constructor(private readonly url: string) {}
-
-  async send(raw: unknown): Promise<AssistanceResponse> {
-    const parsed = AssistanceRequestSchema.safeParse(raw);
-    if (!parsed.success) {
-      return { request_id: requestId(raw), task_id: "", status: "rejected", reason: "invalid_request_schema" };
-    }
-    const res = await fetch(`${this.url.replace(/\/$/, "")}/assistance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed.data),
-    });
-    if (!res.ok) {
-      return { request_id: parsed.data.request_id, task_id: "", status: "rejected", reason: `bridge_http_${res.status}` };
-    }
-    const data = await res.json();
-    const out = AssistanceResponseSchema.safeParse(data);
-    return out.success
-      ? out.data
-      : { request_id: parsed.data.request_id, task_id: "", status: "rejected", reason: "invalid_response_schema" };
-  }
-}
-
-export function createAssistanceBridge(opts?: { data?: DataLayer; consent?: ConsentSettings }): AssistanceBridge {
-  if (fetchaiStatus().mode === "live" && process.env.FETCHAI_BRIDGE_URL) {
-    return new FetchAIBridge(process.env.FETCHAI_BRIDGE_URL);
-  }
-  return new SandboxBridge(opts?.data ?? getDataLayer(), opts?.consent ?? DEFAULT_CONSENT);
-}
-
-/**
- * Finance-side assistance coordination (landing-page service map: Fetch.ai
- * "assistance coordination"). When Finance finds something a person cannot
- * resolve alone (e.g. a large suspected overcharge they need help disputing, or
- * benefits enrollment they cannot complete), it asks Guardian to coordinate a
- * human helper. Same honesty rule as the wellness path: a typed, minimized
- * message (need + urgency + consent ref) crosses, never the financial detail or
- * a conversation. Live mode posts to the Python uAgents bridge; sandbox mode
- * runs the identical exchange in-process and is labeled "sandbox (in-process
- * bus)", never "Fetch.ai".
- */
-export const FinanceAssistanceRequestSchema = z.object({
-  request_id: z.string().min(1),
-  from_agent: z.literal("finance"),
-  to_agent: z.literal("guardian"),
-  user_id: z.string().min(1),
-  need: z.string().min(1).max(300),
-  consent_ref: z.string().min(1).max(80),
-  urgency: z.enum(["routine", "soon", "urgent"]),
-});
-export type FinanceAssistanceRequest = z.infer<typeof FinanceAssistanceRequestSchema>;
-
-export interface FinanceAssistanceBridge {
-  readonly backend: "fetchai" | "sandbox";
-  send(req: unknown): Promise<AssistanceResponse>;
-}
-
-/**
- * In-process realization for the finance -> guardian assistance request. Mirrors
- * SandboxBridge, but constructs the narrow assistance.request event and has
- * Guardian act on it directly. (There is no finance->guardian entry in the shared
- * CROSS_AGENT_RULES bus policy yet; this bridge therefore carries the one declared
- * finance message with its own schema + consent + audit, giving the same minimum
- * data / consent guarantees. Adding a finance->guardian rule to policy.ts would
- * additionally let it flow through the generic bus.)
- */
-export class FinanceSandboxBridge implements FinanceAssistanceBridge {
-  readonly backend = "sandbox" as const;
   constructor(
-    private readonly data: DataLayer,
-    private readonly consent: ConsentSettings = DEFAULT_CONSENT,
+    private readonly url: string,
+    private readonly from: RequesterAgent = "wellness",
   ) {}
 
   async send(raw: unknown): Promise<AssistanceResponse> {
-    const parsed = FinanceAssistanceRequestSchema.safeParse(raw);
-    if (!parsed.success) {
-      return {
-        request_id: requestId(raw),
-        task_id: "",
-        status: "rejected",
-        reason: `invalid_request_schema: ${parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`,
-      };
+    const parsed = schemaFor[this.from].safeParse(raw);
+    if (!parsed.success) return rejected(requestId(raw), "invalid_request_schema");
+    let res: Response;
+    try {
+      res = await fetch(`${this.url.replace(/\/$/, "")}/assistance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data),
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (err) {
+      return rejected(parsed.data.request_id, `fetchai_bridge_unreachable: ${err instanceof Error ? err.message : String(err)}`);
     }
-    const req = parsed.data;
-    const audit = new AuditLog(this.data.memory, req.user_id);
-    await audit.record({
-      actor: "bridge:finance",
-      action: "assistance.request.sent",
-      correlationId: req.request_id,
-      detail: { need: req.need, urgency: req.urgency },
-    });
-
-    // Guardian receives the declared, minimized assistance.request and coordinates.
-    const guardian = createAgent("guardian", { data: this.data, userId: req.user_id, consent: this.consent });
-    await guardian.initialize();
-    const event = {
-      id: id("evt"),
-      correlationId: req.request_id,
-      sourceAgent: "finance" as const,
-      targetAgent: "guardian" as const,
-      type: "assistance.request",
-      userId: req.user_id,
-      payload: { need: req.need, urgency: req.urgency, consentRef: req.consent_ref },
-      status: "accepted" as const,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    const task = await guardian.handleEvent(event);
-
-    const response: AssistanceResponse = {
-      request_id: req.request_id,
-      task_id: task?.id ?? "",
-      status: "accepted",
-    };
-    await audit.record({
-      actor: "bridge:guardian",
-      action: "assistance.response.sent",
-      correlationId: req.request_id,
-      detail: { task_id: response.task_id, status: response.status },
-    });
-    return response;
+    if (!res.ok) return rejected(parsed.data.request_id, `bridge_http_${res.status}`);
+    const out = AssistanceResponseSchema.safeParse(await res.json());
+    return out.success ? out.data : rejected(parsed.data.request_id, "invalid_response_schema");
   }
-}
-
-/** Live uAgents bridge for the finance assistance path. */
-export class FinanceFetchAIBridge implements FinanceAssistanceBridge {
-  readonly backend = "fetchai" as const;
-  constructor(private readonly url: string) {}
-
-  async send(raw: unknown): Promise<AssistanceResponse> {
-    const parsed = FinanceAssistanceRequestSchema.safeParse(raw);
-    if (!parsed.success) {
-      return { request_id: requestId(raw), task_id: "", status: "rejected", reason: "invalid_request_schema" };
-    }
-    const res = await fetch(`${this.url.replace(/\/$/, "")}/assistance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed.data),
-    });
-    if (!res.ok) {
-      return { request_id: parsed.data.request_id, task_id: "", status: "rejected", reason: `bridge_http_${res.status}` };
-    }
-    const data = await res.json();
-    const out = AssistanceResponseSchema.safeParse(data);
-    return out.success
-      ? out.data
-      : { request_id: parsed.data.request_id, task_id: "", status: "rejected", reason: "invalid_response_schema" };
-  }
-}
-
-export function createFinanceAssistanceBridge(opts?: {
-  data?: DataLayer;
-  consent?: ConsentSettings;
-}): FinanceAssistanceBridge {
-  if (fetchaiStatus().mode === "live" && process.env.FETCHAI_BRIDGE_URL) {
-    return new FinanceFetchAIBridge(process.env.FETCHAI_BRIDGE_URL);
-  }
-  return new FinanceSandboxBridge(opts?.data ?? getDataLayer(), opts?.consent ?? DEFAULT_CONSENT);
 }
 
 /**
- * Finance-side orchestration: send the typed request through the bridge and turn
- * the response into something to say to the person. Consent is recorded by the
- * caller (the Finance tool) before this is invoked, mirroring the wellness path.
+ * Where an agent's uAgent listens: FETCHAI_<AGENT>_URL, or for Wellness the
+ * original FETCHAI_BRIDGE_URL. Each requester has its own uAgent and URL.
+ */
+export function bridgeUrlFor(agent: RequesterAgent): string | undefined {
+  const own = process.env[`FETCHAI_${agent.toUpperCase()}_URL`]?.trim();
+  if (own) return own;
+  if (agent === "wellness") return process.env.FETCHAI_BRIDGE_URL?.trim() || undefined;
+  return undefined;
+}
+
+export function createAssistanceBridge(opts?: {
+  data?: DataLayer;
+  consent?: ConsentSettings;
+  from?: RequesterAgent;
+}): AssistanceBridge {
+  const from = opts?.from ?? "wellness";
+  const url = bridgeUrlFor(from);
+  if (url) return new FetchAIBridge(url, from);
+  return new SandboxBridge(opts?.data ?? getDataLayer(), opts?.consent ?? DEFAULT_CONSENT, from);
+}
+
+/** Finance-side aliases (kept for existing callers). */
+export class FinanceSandboxBridge extends SandboxBridge {
+  constructor(data: DataLayer, consent: ConsentSettings = DEFAULT_CONSENT) {
+    super(data, consent, "finance");
+  }
+}
+export class FinanceFetchAIBridge extends FetchAIBridge {
+  constructor(url: string) {
+    super(url, "finance");
+  }
+}
+export function createFinanceAssistanceBridge(opts?: { data?: DataLayer; consent?: ConsentSettings }): AssistanceBridge {
+  return createAssistanceBridge({ ...opts, from: "finance" });
+}
+
+function describeAccepted(res: AssistanceResponse): string {
+  return `task ${res.task_id}${res.task_status ? `, ${res.task_status.replace(/_/g, " ")}` : ""}`;
+}
+
+/**
+ * Finance-side orchestration: when Finance finds something a person cannot
+ * resolve alone, it asks Guardian to coordinate a human helper. Consent is
+ * recorded by the caller (the Finance tool) before this is invoked.
  */
 export async function requestFinancialAssistance(
-  bridge: FinanceAssistanceBridge,
+  bridge: AssistanceBridge,
   input: { userId: string; need: string; consentRef: string; urgency?: FinanceAssistanceRequest["urgency"] },
 ): Promise<{ request: FinanceAssistanceRequest; response: AssistanceResponse; userMessage: string }> {
   const request: FinanceAssistanceRequest = {
@@ -300,113 +251,67 @@ export async function requestFinancialAssistance(
   const response = await bridge.send(request);
   const userMessage =
     response.status === "accepted"
-      ? "I've asked Guardian to arrange a person to help you with this, and they've started coordinating it."
+      ? `I've asked Guardian to arrange a person to help you with this, and they've started coordinating it (${describeAccepted(response)}).`
       : "I wasn't able to arrange that help just now, but we can try another way together.";
   return { request, response, userMessage };
 }
 
 /**
- * Care-side assistance coordination over the agent-messaging bridge.
- *
- * Care asks Guardian to arrange physical human help (e.g. someone to collect a
- * medication the person cannot pick up). Live mode posts the typed message to the
- * Python uAgents service exactly like Wellness; sandbox mode runs the SAME exchange
- * over the declared in-process `care -> guardian assistance.request` bus event
- * (policy.ts), so the capability is never falsely labeled Fetch.ai without a
- * reachable bridge. Only the minimum data crosses (need, urgency, consent ref).
+ * Care-side orchestration: Care asks Guardian to arrange physical human help
+ * (e.g. someone to collect a medication). Same bridge, Care's own uAgent.
  */
-export async function requestCareAssistance(
-  input: { data: DataLayer; userId: string; need: string; urgency?: AssistanceRequest["urgency"]; consent?: ConsentSettings; correlationId?: string },
-): Promise<{ ok: boolean; backend: "fetchai" | "sandbox"; taskId: string; userMessage: string; reason?: string }> {
-  const consent = input.consent ?? DEFAULT_CONSENT;
-  const requestId = input.correlationId ?? id("careassist");
-
-  // Live Fetch.ai bridge: send the typed message to the Python uAgents service.
-  if (fetchaiStatus().mode === "live" && process.env.FETCHAI_BRIDGE_URL) {
-    try {
-      const res = await fetch(`${process.env.FETCHAI_BRIDGE_URL.replace(/\/$/, "")}/assistance`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          request_id: requestId,
-          from_agent: "care",
-          to_agent: "guardian",
-          user_id: input.userId,
-          need: input.need.slice(0, 300),
-          consent_ref: id("consent"),
-          urgency: input.urgency ?? "soon",
-        }),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { task_id?: string; status?: string };
-        const ok = data.status !== "rejected";
-        return {
-          ok,
-          backend: "fetchai",
-          taskId: data.task_id ?? "",
-          userMessage: ok
-            ? "I've asked Guardian to arrange a helper for that, and they've started coordinating."
-            : "I couldn't arrange that help just now, but we can try another way.",
-        };
-      }
-      // Fall through to the in-process bus on a bridge error (honest fallback).
-    } catch {
-      /* fall through to sandbox bus */
-    }
-  }
-
-  // Sandbox: run the declared care -> guardian assistance.request over the bus.
-  const bus = new AgentEventBus(input.data.events, consent);
-  const pub = await bus.publish({
-    sourceAgent: "care",
-    targetAgent: "guardian",
-    type: "assistance.request",
-    userId: input.userId,
-    correlationId: requestId,
-    payload: { need: input.need.slice(0, 300), urgency: input.urgency ?? "soon" },
+export async function requestCareAssistance(input: {
+  data: DataLayer;
+  userId: string;
+  need: string;
+  urgency?: AssistanceRequest["urgency"];
+  consent?: ConsentSettings;
+  correlationId?: string;
+}): Promise<{ ok: boolean; backend: "fetchai" | "sandbox"; taskId: string; userMessage: string; reason?: string }> {
+  const bridge = createAssistanceBridge({ data: input.data, consent: input.consent, from: "care" });
+  const response = await bridge.send({
+    request_id: input.correlationId ?? id("careassist"),
+    from_agent: "care",
+    to_agent: "guardian",
+    user_id: input.userId,
+    need: input.need.slice(0, 300),
+    consent_ref: id("consent"),
+    urgency: input.urgency ?? "soon",
   });
-  if (!pub.ok) {
-    return {
-      ok: false,
-      backend: "sandbox",
-      taskId: "",
-      userMessage: "I couldn't arrange that help just now, but we can try another way.",
-      reason: pub.reason,
-    };
-  }
-  const guardian = createAgent("guardian", { data: input.data, userId: input.userId, consent });
-  await guardian.initialize();
-  const task = await guardian.handleEvent(pub.event);
-  await bus.markCompleted(pub.event.id, "accepted via care assistance request");
+  const ok = response.status === "accepted";
   return {
-    ok: true,
-    backend: "sandbox",
-    taskId: task?.id ?? "",
-    userMessage: "I've asked Guardian to arrange a helper for that, and they've started coordinating.",
+    ok,
+    backend: bridge.backend,
+    taskId: response.task_id,
+    userMessage: ok
+      ? `I've asked Guardian to arrange a helper for that, and they've started coordinating (${describeAccepted(response)}).`
+      : "I couldn't arrange that help just now, but we can try another way.",
+    reason: response.reason,
   };
 }
 
 /**
- * Wellness-side orchestration: record consent, send the typed request through the
- * bridge, and turn the response into something to say to the person.
+ * Wellness-side orchestration: send the typed request through the bridge and
+ * turn Guardian's response into something to say to the person. The caller has
+ * already obtained the person's permission and recorded it as `consentRef`.
  */
 export async function requestAssistance(
   bridge: AssistanceBridge,
-  input: { userId: string; need: string; urgency?: AssistanceRequest["urgency"] },
+  input: { userId: string; need: string; urgency?: AssistanceRequest["urgency"]; consentRef?: string; requestId?: string },
 ): Promise<{ request: AssistanceRequest; response: AssistanceResponse; userMessage: string }> {
   const request: AssistanceRequest = {
-    request_id: id("areq"),
+    request_id: input.requestId ?? id("areq"),
     from_agent: "wellness",
     to_agent: "guardian",
     user_id: input.userId,
     need: input.need,
-    consent_ref: id("consent"), // Wellness recorded the person's consent.
+    consent_ref: input.consentRef ?? id("consent"),
     urgency: input.urgency ?? "soon",
   };
   const response = await bridge.send(request);
   const userMessage =
     response.status === "accepted"
-      ? "I've asked Guardian to help arrange that, and they've started coordinating a helper for you."
+      ? `Guardian accepted your request and has started arranging someone to help you (${describeAccepted(response)}). I'll let you know as soon as a helper is assigned.`
       : "I wasn't able to arrange that help just now, but I'll stay with you and we can try another way.";
   return { request, response, userMessage };
 }
