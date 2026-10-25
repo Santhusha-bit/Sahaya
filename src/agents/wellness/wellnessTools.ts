@@ -6,6 +6,9 @@ import { readConsent } from "./wellnessConsent";
 import { runWellnessTurn } from "./wellnessWorkflow";
 import { getTimeSeriesProvider } from "@/integrations/tigerdata";
 import { updateHouseholdAnalytics } from "./householdAnalytics";
+import { getVoiceProvider } from "@/integrations/cartesia";
+import { getCurrentUser } from "@/lib/user";
+import { auth0Status } from "@/lib/env";
 
 export const wellnessTools: AgentTool[] = [
   {
@@ -376,6 +379,77 @@ export const wellnessTools: AgentTool[] = [
         correlationId: ctx.correlationId,
       });
       return { ok: res.ok, summary: res.detail, data: res };
+    },
+  },
+  {
+    name: "speakWellnessReply",
+    description:
+      "Speak a warm, non-diagnostic reply aloud for the person, using Cartesia voice synthesis when configured. Live Cartesia returns audio the client plays; otherwise a sandbox result tells the client to speak it with the browser's SpeechSynthesis. A voice failure never blocks the conversation or touches the canonical record.",
+    inputSchema: z.object({ text: z.string().min(1).max(2000) }),
+    async execute(input, ctx) {
+      const voice = getVoiceProvider();
+      let result;
+      try {
+        result = await voice.speak(input.text);
+      } catch (err) {
+        // Voice is never allowed to break the turn — report honestly and move on.
+        result = {
+          ok: false,
+          mode: "sandbox" as const,
+          spoken: input.text.slice(0, 2000),
+          playback: "browser-speech-synthesis" as const,
+          detail: `Voice synthesis failed safely: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+      await ctx.audit?.record({
+        actor: "wellness",
+        action: "wellness.speak",
+        correlationId: ctx.correlationId,
+        detail: { backend: voice.backend, mode: result.mode, ok: result.ok, chars: result.spoken.length },
+      });
+      return {
+        ok: true,
+        summary: result.ok ? "Spoken with Cartesia voice." : "Prepared for the browser to speak.",
+        data: {
+          backend: voice.backend,
+          mode: result.mode,
+          spoken: result.spoken,
+          playback: result.playback,
+          audioBase64: result.audioBase64,
+          contentType: result.contentType,
+          detail: result.detail,
+        },
+      };
+    },
+  },
+  {
+    name: "confirmWellnessIdentity",
+    description:
+      "Confirm who Wellness is speaking with and under what authentication. The agent runs with the authenticated userId provided by the runtime; this reports that identity and whether it came from a live Auth0 session or the sandbox demo user, so sensitive actions are honestly attributed to the right person. Makes no direct Auth0 calls.",
+    inputSchema: z.object({}),
+    async execute(_input, ctx) {
+      const user = getCurrentUser();
+      const auth = auth0Status();
+      await ctx.audit?.record({
+        actor: "wellness",
+        action: "wellness.identity",
+        correlationId: ctx.correlationId,
+        detail: { userId: ctx.userId, authMode: user.authMode, auth: auth.mode },
+      });
+      return {
+        ok: true,
+        summary:
+          user.authMode === "live"
+            ? `Speaking with ${user.name} (verified Auth0 session).`
+            : `Speaking with ${user.name} (sandbox demo user — Auth0 not configured).`,
+        data: {
+          userId: ctx.userId,
+          name: user.name,
+          role: user.role,
+          authMode: user.authMode,
+          auth: { mode: auth.mode, detail: auth.detail },
+        },
+      };
     },
   },
 ];

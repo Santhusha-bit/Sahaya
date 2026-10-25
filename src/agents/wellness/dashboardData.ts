@@ -11,8 +11,9 @@ import type { DataLayer } from "@/agents/base/types";
 import { createAgent } from "@/agents/registry";
 import { getConsent } from "@/agents/consent";
 import { AuditLog } from "@/agents/base/audit";
-import { wellnessIntegrationStatuses, type IntegrationStatus } from "@/lib/env";
+import { wellnessIntegrationStatuses, cartesiaStatus, auth0Status, type IntegrationStatus } from "@/lib/env";
 import { getPersonalMemoryProvider, type ContinuityItem } from "@/integrations/moss";
+import { getVoiceProvider } from "@/integrations/cartesia";
 import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
 import { activeObservations, type StoredObservation } from "./wellnessStore";
 import {
@@ -33,7 +34,7 @@ export interface WellnessDashboard {
   consent: Record<string, boolean>;
   integrations: IntegrationStatus[];
   audit: { actor: string; action: string; at: number; detail?: Record<string, unknown> }[];
-  backends: { timeseries: string; personalMemory: string };
+  backends: { timeseries: string; personalMemory: string; voice: string };
 }
 
 export async function buildWellnessDashboard(data: DataLayer, userId: string): Promise<WellnessDashboard> {
@@ -82,6 +83,11 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
     .sort((a, b) => b.at - a.at)
     .slice(0, 40);
 
+  // Voice (Cartesia) + Auth0 are mapped Wellness services. Surface them honestly
+  // alongside the core integrations so the dashboard reflects every wired service.
+  const voice = getVoiceProvider();
+  const integrations: IntegrationStatus[] = [...wellnessIntegrationStatuses(), cartesiaStatus(), auth0Status()];
+
   return {
     observations,
     continuity,
@@ -90,9 +96,9 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
     report,
     analytics: analyticsRes.aggregates,
     consent,
-    integrations: wellnessIntegrationStatuses(),
+    integrations,
     audit,
-    backends: { timeseries: ts.backend, personalMemory: moss.backend },
+    backends: { timeseries: ts.backend, personalMemory: moss.backend, voice: voice.backend },
   };
 }
 
