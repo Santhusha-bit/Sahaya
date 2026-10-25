@@ -12,6 +12,7 @@ export class FinanceAgent extends BaseAgent {
       "Hello, I'm Finance. I make confusing bills and statements clear, and I watch for overcharges. Want me to look at a bill or check your recurring charges?",
     systemPrompt: financePrompt,
     suggestedCommands: [
+      "Investigate this bill",
       "Help me understand this hospital bill",
       "What subscriptions am I paying for?",
       "Is my care facility invoice correct?",
@@ -75,6 +76,12 @@ export class FinanceAgent extends BaseAgent {
       return {
         reply: "I'll check that invoice against the agreed rate.",
         toolCalls: [{ name: "auditCareFacilityInvoice", input: { facility: "Care facility", agreedMonthly: 4500, invoiceTotal: 4850, extras: [{ description: "Laundry", amount: 120 }] } }],
+      };
+    }
+    if (/investigat|dig into|look deeper|overcharg/.test(m)) {
+      return {
+        reply: "I'll hand this bill to an investigation agent and check its work before I tell you anything.",
+        toolCalls: [{ name: "investigateBill", input: {} }],
       };
     }
     if (/bill|hospital|charge|invoice|medical/.test(m)) {

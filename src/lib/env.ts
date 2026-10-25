@@ -210,6 +210,18 @@ export function checkoutStatus(): IntegrationStatus {
   };
 }
 
+export function factoryDroidStatus(): IntegrationStatus {
+  const live = has("FACTORY_API_KEY");
+  return {
+    key: "factory-droid",
+    label: "Factory Droid SDK (bill investigations)",
+    mode: live ? "live" : "unavailable",
+    detail: live
+      ? "Live: Finance hands bill investigations to a separate Droid run with only read-only calculation tools and the authorized documents."
+      : "Unavailable: no FACTORY_API_KEY, so Droid does not run. Investigations use Finance's local calculation engine instead and are labeled as such.",
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -228,6 +240,7 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     snowflakeStatus(),
     apifyStatus(),
     checkoutStatus(),
+    factoryDroidStatus(),
   ];
 }
 

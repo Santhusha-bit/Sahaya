@@ -5,6 +5,8 @@ import { createFinanceAssistanceBridge, requestFinancialAssistance } from "@/int
 import { getDataLayer } from "../base/dataLayer";
 import { getCurrentUser } from "@/lib/user";
 import { auth0Status, jiraStatus } from "@/lib/env";
+import { startInvestigation } from "./investigation/service";
+import { dispatchInvestigation } from "./investigation/worker";
 
 export const financeTools: AgentTool[] = [
   {
@@ -32,6 +34,24 @@ export const financeTools: AgentTool[] = [
         ok: true,
         summary: `Bill from ${input.provider}: $${total.toFixed(2)} across ${input.lineItems.length} item(s). ${flags.length ? `${flags.length} flag(s).` : "Nothing unusual."}`,
         data: { billId: rec.id, total, flags },
+      };
+    },
+  },
+  {
+    name: "investigateBill",
+    description:
+      "Start a deeper investigation of a medical bill the person has authorized for review (itemized statement + insurance EOB). Runs in the background as a separate Factory Droid agent with read-only calculation tools; Finance verifies its findings. Never submits anything.",
+    inputSchema: z.object({ documentIds: z.array(z.string()).optional().describe("Authorized document ids; omit to use all authorized bill documents.") }),
+    async execute(input, ctx) {
+      const inv = await startInvestigation({ memory: ctx.memory, tasks: ctx.tasks }, { documentIds: input.documentIds, correlationId: ctx.correlationId });
+      await dispatchInvestigation(ctx.userId, inv.id);
+      return {
+        ok: true,
+        summary:
+          inv.engine === "factory-droid"
+            ? `I've started a detailed investigation of this bill with a Factory Droid agent. You can follow its progress on the investigation screen.`
+            : `I've started a detailed investigation of this bill (local engine; Factory Droid isn't configured). You can follow it on the investigation screen.`,
+        data: { investigationId: inv.id, taskId: inv.taskId, engine: inv.engine },
       };
     },
   },

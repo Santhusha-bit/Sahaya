@@ -26,11 +26,14 @@
     "demo:snowflake": "vite-node --config vitest.config.ts scripts/demo-snowflake.ts",
     "demo:wellness-full": "vite-node --config vitest.config.ts scripts/demo-wellness-full.ts",
     "redteam:wellness": "vite-node --config vitest.config.ts scripts/redteam-wellness.ts",
-    "demo:shopping": "vite-node --config vitest.config.ts scripts/demo-shopping.ts"
+    "demo:shopping": "vite-node --config vitest.config.ts scripts/demo-shopping.ts",
+    "demo:investigation": "vite-node --config vitest.config.ts scripts/demo-investigation.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
+    "@factory/droid-sdk": "^0.10.0",
     "convex": "^1.17.4",
+    "droid": "^0.249.0",
     "next": "^15.5.28",
     "react": "19.1.1",
     "react-dom": "19.1.1",
