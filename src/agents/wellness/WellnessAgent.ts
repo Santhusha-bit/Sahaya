@@ -46,7 +46,8 @@ export class WellnessAgent extends BaseAgent {
     }
     if (/no ?one to help|nobody to help|don'?t have anyone|no one can help|help me get groceries|need someone to/.test(m)) {
       return {
-        reply: "You shouldn't have to manage that alone. Let me ask Guardian to arrange someone to help you.",
+        reply:
+          "You shouldn't have to manage that alone. With your permission, I can ask Guardian to arrange someone to help. Tap Approve below and I'll send the request.",
         toolCalls: [{ name: "requestHumanAssistance", input: { need: message.slice(0, 280), urgency: "soon" } }],
       };
     }

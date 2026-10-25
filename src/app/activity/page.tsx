@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AgentEvent } from "@/agents/base/types";
+import { AgentNetworkLog } from "@/components/AgentNetworkLog";
 
 const AGENT_COLOR: Record<string, string> = {
   guardian: "#168b82",
@@ -35,6 +36,8 @@ export default function ActivityPage() {
       <p className="mt-1.5 text-[15px] leading-relaxed text-[var(--muted)]">
         Every cross-agent request, and whether it was authorized. This is the audit trail of agent collaboration.
       </p>
+
+      <AgentNetworkLog />
 
       {loading && (
         <section className="mt-6 flex flex-col gap-3">
