@@ -159,6 +159,26 @@ and the result plus a tamper-evident trail sync back (Jira when configured).
   orchestration + planner routing.
 - Demo: `npm run demo:agents`.
 
+### Track 5b: independent uAgents for all four agents ✅ done (verified live)
+- Each agent is now its OWN uAgent in its OWN process (`guardian_agent.py`,
+  `requester_agent.py wellness|care|finance`, shared `kinline_agents.py`); the old
+  single-Bureau bridge is replaced by `bridge.py`, a launcher that spawns them.
+  Local peer resolution (no Almanac/internet needed); `almanac` mode available.
+- Guardian's uAgent verifies the signed envelope sender matches the claimed
+  `from_agent`, then hands the request to the TS Guardian
+  (`POST /api/bridge/guardian/assistance` or `serve:guardian`'s `POST /assistance`),
+  which runs bus policy + consent and creates the task; task id + status return
+  over uAgents. Shared intake: `acceptAssistanceAtGuardian` (sandbox uses it too).
+- Wellness `requestHumanAssistance` now `requiresApproval` (permission is code-
+  enforced) and goes through the bridge; its summary reports Guardian's task id.
+  Care and Finance use the same bridge via their own uAgents; new declared rule
+  `finance -> guardian assistance.request` (`financeToGuardianAssist`).
+- Execution logs per agent (stdout, `logs/*.jsonl`, `GET /logs`); live panel on
+  the Activity page (`/api/bridge/logs`).
+- Tests: `tests/agentBridge.test.ts` now 17 (approval gate, Care/Finance, spoofing,
+  finance consent, live HTTP bridge vs fake uAgent, unreachable bridge, intake route
+  auth). Demo: `npm run demo:a2a` (PASS live: two processes, signed message each way).
+
 VERIFIED LIVE: on this machine (Python 3.13.6), `pip install uagents==0.26.1`
 succeeded, the Bureau started both agents, and a real `POST /assistance` returned
 `{status: accepted, task_id, request_id}` correlated to the request — confirming

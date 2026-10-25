@@ -1,4 +1,5 @@
 import { getConsent } from "./consent";
+import { acceptAssistanceAtGuardian, type AssistanceResponse } from "@/integrations/fetchai";
 import { getDataLayer } from "./base/dataLayer";
 import type { BaseAgent, AgentReply } from "./base/BaseAgent";
 import { AGENT_IDS, createAgent } from "./registry";
@@ -96,6 +97,16 @@ export class AgentService {
     const { record } = await agent.executeTool(toolName, input);
     await this.deliverEvents();
     return { record };
+  }
+
+  /**
+   * Guardian intake for an assistance request that arrived over the Fetch.ai
+   * uAgents bridge (called by the Guardian uAgent). Runs the same schema, bus
+   * policy and consent checks as the in-process path, under this user's consent.
+   */
+  async acceptBridgedAssistance(raw: unknown): Promise<AssistanceResponse> {
+    const consent = await getConsent(this.data, this.userId);
+    return acceptAssistanceAtGuardian(this.data, raw, consent);
   }
 
   /** Approve or reject a pending approval; on approval, execute the deferred tool. */

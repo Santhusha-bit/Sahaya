@@ -9,6 +9,9 @@ import { updateHouseholdAnalytics } from "./householdAnalytics";
 import { getVoiceProvider } from "@/integrations/cartesia";
 import { getCurrentUser } from "@/lib/user";
 import { auth0Status } from "@/lib/env";
+import { getDataLayer } from "../base/dataLayer";
+import { getConsent } from "../consent";
+import { createAssistanceBridge, requestAssistance } from "@/integrations/fetchai";
 
 export const wellnessTools: AgentTool[] = [
   {
@@ -221,32 +224,54 @@ export const wellnessTools: AgentTool[] = [
   {
     name: "requestHumanAssistance",
     description:
-      "Ask Guardian to coordinate a human helper (e.g. for groceries) when the person says they have no one to help. Authorized cross-agent workflow carried over the Fetch.ai bridge; records the person's consent first and sends only the minimum needed.",
+      "Ask Guardian to coordinate a human helper (e.g. for groceries) when the person says they have no one to help. The person must approve first (enforced by the runtime). Sent to Guardian as a typed message over the Fetch.ai uAgents bridge (in-process when no bridge is configured), carrying only the need, urgency and consent reference. Returns Guardian's task id and status.",
     inputSchema: z.object({
       need: z.string().min(1).max(300),
       urgency: z.enum(["routine", "soon", "urgent"]).default("soon"),
     }),
+    // Permission is code-enforced: nothing is sent until the person approves.
+    requiresApproval: true,
+    approvalSummary: (input) => ({
+      title: "Ask Guardian to arrange a helper?",
+      description: `Wellness would like to ask Guardian to find someone to help with: "${input.need}" (${input.urgency}). Only that need, its urgency and your consent reference are shared, never your conversation.`,
+    }),
     async execute(input, ctx) {
+      // Reached only after approval: record the consent the person just gave.
       const consent = await ctx.memory.save(
         "consents",
         { purpose: "human_assistance", need: input.need, grantedAt: Date.now() },
         { tags: ["consent"] },
       );
-      const res = await ctx.bus.publish({
-        sourceAgent: "wellness",
-        targetAgent: "guardian",
-        type: "assistance.request",
+      const data = getDataLayer();
+      const bridge = createAssistanceBridge({ data, consent: await getConsent(data, ctx.userId), from: "wellness" });
+      ctx.log(`sending assistance request to Guardian via ${bridge.backend}`);
+      const { request, response, userMessage } = await requestAssistance(bridge, {
         userId: ctx.userId,
-        correlationId: ctx.correlationId,
-        payload: { need: input.need, urgency: input.urgency, consentRef: consent.id },
+        need: input.need,
+        urgency: input.urgency,
+        consentRef: consent.id,
+        requestId: ctx.correlationId,
       });
+      await ctx.audit.record({
+        actor: "wellness",
+        action: "assistance.response.received",
+        correlationId: request.request_id,
+        detail: { backend: bridge.backend, status: response.status, task_id: response.task_id, reason: response.reason },
+      });
+      const ok = response.status === "accepted";
       return {
-        ok: res.ok,
-        summary: res.ok
-          ? "I've asked Guardian to help arrange a person to assist you, and they're coordinating it now."
-          : `Could not reach Guardian: ${res.reason}`,
-        data: { eventId: res.event.id, status: res.event.status, consentRef: consent.id },
-        error: res.ok ? undefined : res.reason,
+        ok,
+        summary: userMessage,
+        data: {
+          backend: bridge.backend,
+          requestId: request.request_id,
+          taskId: response.task_id,
+          taskStatus: response.task_status,
+          status: response.status,
+          coordinator: response.coordinator,
+          consentRef: consent.id,
+        },
+        error: ok ? undefined : response.reason,
       };
     },
   },

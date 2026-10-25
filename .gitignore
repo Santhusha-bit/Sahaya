@@ -34,6 +34,7 @@ redteam-wellness-report.md
 __pycache__/
 *.pyc
 services/uagents/.venv/
+services/uagents/logs/
 
 # logs
 npm-debug.log*

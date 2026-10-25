@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { AgentEvent } from "@/agents/base/types";
+import { AgentNetworkLog } from "@/components/AgentNetworkLog";
 
 const AGENT_COLOR: Record<string, string> = {
   guardian: "#168b82",
@@ -40,6 +41,8 @@ export default function ActivityPage() {
         <span>Approvals: sensitive hand-offs waiting on family review</span>
         <span className="text-[var(--faint)]">→</span>
       </Link>
+
+      <AgentNetworkLog />
 
       {loading && (
         <section className="mt-6 flex flex-col gap-3">
