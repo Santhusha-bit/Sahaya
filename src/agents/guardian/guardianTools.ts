@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
 import { getIncidentIndex } from "@/integrations/search";
+import { sendSms, twilioSmsConfigured } from "@/integrations/twilio";
 import { detectSignals } from "./scamSignals";
 import { runScamScreening } from "./scamWorkflow";
 
@@ -198,18 +199,55 @@ export const guardianTools: AgentTool[] = [
       const match = contacts.find(
         (c) => String(c.data.name ?? "").toLowerCase() === input.contactName.toLowerCase(),
       );
+      const phone = match?.data.phone ? String(match.data.phone) : undefined;
+
+      // Deliver via Twilio SMS when the contact has a phone number. Honest
+      // live/sandbox: sendSms() only returns channel "sms" when a real Twilio
+      // send succeeded, otherwise "sandbox" (nothing left the device). We record
+      // whatever actually happened and never claim an SMS we didn't send.
+      let channel: "sms" | "in_app" = "in_app";
+      let delivered = true;
+      let smsError: string | undefined;
+      let smsSid: string | undefined;
+      if (phone) {
+        const sms = await sendSms(phone, `Kinline Guardian: ${input.message}`);
+        channel = sms.channel === "sms" ? "sms" : "in_app";
+        delivered = sms.delivered || channel === "in_app";
+        smsError = sms.error;
+        smsSid = sms.sid;
+      }
+
       const rec = await ctx.memory.save("notifications", {
         contactName: input.contactName,
         message: input.message,
-        delivered: true,
-        channel: match?.data.phone ? "sms" : "in_app",
+        delivered,
+        channel,
+        smsAttempted: !!phone,
+        smsDelivered: channel === "sms",
+        smsSid,
+        ...(smsError ? { smsError } : {}),
       });
+      await ctx.audit.record({
+        actor: "guardian",
+        action: "contact.notify",
+        correlationId: ctx.correlationId,
+        detail: { to: input.contactName, channel, delivered, smsDelivered: channel === "sms" },
+      });
+
+      const deliveryNote =
+        channel === "sms"
+          ? "I texted them."
+          : phone
+            ? twilioSmsConfigured()
+              ? "The text couldn't be sent just now, so I logged the alert in the app for them."
+              : "I logged the alert in the app for them (live SMS isn't configured, so nothing was texted)."
+            : "I logged the alert in the app for them.";
       return {
         ok: true,
         summary: match
-          ? `Alerted ${input.contactName}.`
-          : `Sent to ${input.contactName} (not in trusted list yet — consider adding them).`,
-        data: { notificationId: rec.id },
+          ? `Alerted ${input.contactName}. ${deliveryNote}`
+          : `Sent to ${input.contactName} (not in trusted list yet — consider adding them). ${deliveryNote}`,
+        data: { notificationId: rec.id, channel, delivered, smsDelivered: channel === "sms" },
       };
     },
   },

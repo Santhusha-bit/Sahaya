@@ -22,6 +22,71 @@ export function twilioConfigured(): boolean {
   return !!(process.env.TWILIO_ACCOUNT_SID?.trim() && process.env.TWILIO_AUTH_TOKEN?.trim());
 }
 
+/**
+ * Outbound SMS result. `channel` is "sms" only when the message actually left via
+ * the live Twilio REST API; otherwise it is "sandbox" and nothing was sent off the
+ * device. Callers must surface this honestly (never claim an SMS was delivered in
+ * sandbox mode).
+ */
+export interface SmsResult {
+  channel: "sms" | "sandbox";
+  delivered: boolean;
+  /** Twilio message SID when live, else a local reference id. */
+  sid?: string;
+  /** Present when a live send failed; the caller should fall back gracefully. */
+  error?: string;
+}
+
+/** True only when SMS can actually be sent: credentials + a configured sender. */
+export function twilioSmsConfigured(): boolean {
+  return twilioConfigured() && !!(process.env.TWILIO_FROM_NUMBER?.trim() || process.env.TWILIO_MESSAGING_SERVICE_SID?.trim());
+}
+
+/**
+ * Send an SMS via the Twilio REST API.
+ *
+ * Honest integration (global rule 1): LIVE only when TWILIO_ACCOUNT_SID +
+ * TWILIO_AUTH_TOKEN and a sender (TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID)
+ * are set. Otherwise this is a deterministic sandbox no-op with the SAME interface
+ * (returns channel "sandbox", delivered=false) so nothing is ever faked as delivered.
+ */
+export async function sendSms(to: string, body: string): Promise<SmsResult> {
+  const sid = process.env.TWILIO_ACCOUNT_SID?.trim();
+  const token = process.env.TWILIO_AUTH_TOKEN?.trim();
+  const from = process.env.TWILIO_FROM_NUMBER?.trim();
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID?.trim();
+  const dest = to.trim();
+
+  if (!sid || !token || (!from && !messagingServiceSid) || !dest) {
+    return { channel: "sandbox", delivered: false, sid: `sandbox-sms-${Date.now()}` };
+  }
+
+  const params = new URLSearchParams();
+  params.set("To", dest);
+  params.set("Body", body.slice(0, 1600));
+  if (messagingServiceSid) params.set("MessagingServiceSid", messagingServiceSid);
+  else params.set("From", from!);
+
+  try {
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+      method: "POST",
+      headers: {
+        Authorization: "Basic " + Buffer.from(`${sid}:${token}`).toString("base64"),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { channel: "sandbox", delivered: false, error: `twilio_http_${res.status}: ${detail.slice(0, 200)}` };
+    }
+    const data = (await res.json()) as { sid?: string };
+    return { channel: "sms", delivered: true, sid: data.sid };
+  } catch (err) {
+    return { channel: "sandbox", delivered: false, error: String(err) };
+  }
+}
+
 /** XML-escape text before placing it inside TwiML <Say>. */
 export function xmlEscape(s: string): string {
   return s
