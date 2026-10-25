@@ -10,6 +10,8 @@ scripts/redteam.ts
 scripts/serve-guardian.ts
 redteam-report.md
 
-# The marketing landing page deploys as a separate Vercel project
-# (root directory "landing"), so exclude it from the main app deploy.
-landing/
+# NOTE: do NOT ignore landing/ here. Vercel applies this repository-root
+# .vercelignore to every project in the repo, including the separate
+# sahaya-landing project (root directory "landing"); ignoring it would strip
+# landing/package.json from that build. The main app's next build ignores the
+# landing/ source on its own, so leaving it uploaded is harmless.
