@@ -52,8 +52,8 @@ export function cartesiaStatus(): IntegrationStatus {
     label: "Cartesia (voice)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — Cartesia text-to-speech."
-      : "Sandbox — browser SpeechSynthesis / SpeechRecognition fallback.",
+      ? "Live: Cartesia sonic-3 voices replies and call warnings; ink-whisper streaming STT transcribes calls."
+      : "Sandbox: browser SpeechSynthesis / SpeechRecognition fallback.",
   };
 }
 
@@ -76,7 +76,7 @@ export function callScreeningStatus(): IntegrationStatus {
     label: "WebRTC + Claude (scam-call screening)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? `Live: in-app WebRTC calls; Claude (${AGENT_MODEL}) screens the caller's live transcript and Guardian warns privately.`
+      ? `Live: in-app WebRTC calls; Claude (${AGENT_MODEL}) screens the caller's live transcript (Cartesia STT when configured) and Guardian warns privately.`
       : "Sandbox: in-app WebRTC calls are screened by the deterministic scam rules only (no ANTHROPIC_API_KEY).",
   };
 }

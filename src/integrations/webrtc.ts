@@ -29,7 +29,12 @@ export interface CallRoom {
 
 const ROOM_TTL_MS = 60 * 60 * 1000;
 const MAX_SDP_BYTES = 64 * 1024;
-const rooms = new Map<string, CallRoom>();
+// On globalThis so every route bundle (Next compiles each route separately) shares one map.
+const ROOMS_KEY = "__sahaya_webrtc_rooms__";
+const rooms: Map<string, CallRoom> = ((globalThis as Record<string, unknown>)[ROOMS_KEY] ??= new Map()) as Map<
+  string,
+  CallRoom
+>;
 
 function sweep(now = Date.now()): void {
   for (const [key, room] of rooms) if (now - room.createdAt > ROOM_TTL_MS) rooms.delete(key);
