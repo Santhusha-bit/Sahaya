@@ -21,6 +21,8 @@
     "serve:guardian": "vite-node --config vitest.config.ts scripts/serve-guardian.ts",
     "demo:bitdeer": "vite-node --config vitest.config.ts scripts/demo-bitdeer.ts",
     "demo:wellness-memory": "vite-node --config vitest.config.ts scripts/demo-wellness-memory.ts",
+    "demo:moss-continuity": "vite-node --config vitest.config.ts scripts/demo-moss-continuity.ts",
+    "moss:verify": "vite-node --config vitest.config.ts scripts/moss-verify.ts",
     "demo:backboard": "vite-node --config vitest.config.ts scripts/demo-backboard.ts",
     "demo:tigerdata": "vite-node --config vitest.config.ts scripts/demo-tigerdata.ts",
     "demo:snowflake": "vite-node --config vitest.config.ts scripts/demo-snowflake.ts",

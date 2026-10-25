@@ -129,14 +129,14 @@ export function armadinStatus(): IntegrationStatus {
 }
 
 export function mossStatus(): IntegrationStatus {
-  const live = has("MOSS_API_KEY");
+  const live = has("MOSS_PROJECT_ID") && (has("MOSS_PROJECT_KEY") || has("MOSS_API_KEY")) && has("MOSS_INDEX_NAME");
   return {
     key: "moss",
-    label: "Moss (personal memory)",
+    label: "Moss (continuity retrieval)",
     mode: live ? "live" : "sandbox",
     detail: live
-      ? "Live — Moss personal-memory provider stores Wellness continuity context."
-      : "Sandbox — Wellness continuity memory is served by the Convex/in-process store with the same interface.",
+      ? `Configured: minimized, consented continuity cues sync to Moss index "${process.env.MOSS_INDEX_NAME?.trim()}" (control-plane REST). Convex stays canonical; run npm run moss:verify to confirm the credentials and index.`
+      : "Sandbox: continuity cues are kept in an in-process index with the same semantics; Convex holds the canonical ledger. Set MOSS_PROJECT_ID, MOSS_PROJECT_KEY and MOSS_INDEX_NAME to go live.",
   };
 }
 

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { AgentTool } from "../base/types";
 import { sendSms } from "@/integrations/twilio";
-import { getPersonalMemoryProvider } from "@/integrations/moss";
 import { requestCareAssistance } from "@/integrations/fetchai";
 import { createWorkItemStore } from "@/integrations/jira";
 import { getDataLayer } from "../base/dataLayer";
@@ -92,27 +91,15 @@ export const careTools: AgentTool[] = [
         { medicationName: input.medicationName, taken: input.taken, note: input.note },
         { tags: ["medication", input.taken ? "taken" : "skipped"] },
       );
-      // Moss personal memory: keep a small, durable adherence note so Care stays
-      // personal across conversations. Supplementary only — a Moss failure never
-      // corrupts the canonical Convex/scoped record above.
-      let continuityBackend: string | null = null;
-      try {
-        const moss = getPersonalMemoryProvider();
-        await moss.save({
-          userId: ctx.userId,
-          kind: "note",
-          text: `medication ${input.taken ? "taken" : "skipped"}: ${input.medicationName}${input.note ? ` (${input.note})` : ""}`,
-        });
-        continuityBackend = moss.backend;
-      } catch {
-        /* non-fatal: canonical record is already saved */
-      }
+      // Medication adherence is sensitive health data: it stays in the canonical
+      // Convex record only. Moss documents no encryption-at-rest or retention
+      // guarantees, so it is never given medication information.
       return {
         ok: true,
         summary: input.taken
           ? `Logged ${input.medicationName} as taken. Nice work.`
           : `Noted ${input.medicationName} skipped — I'll check in later.`,
-        data: { confirmationId: rec.id, continuity: continuityBackend },
+        data: { confirmationId: rec.id },
       };
     },
   },
@@ -181,14 +168,6 @@ export const careTools: AgentTool[] = [
     inputSchema: z.object({ items: z.array(z.string().min(1)).min(1) }),
     async execute(input, ctx) {
       const rec = await ctx.memory.save("groceryLists", { items: input.items, status: "draft" }, { tags: ["grocery"] });
-      // Moss personal memory: remember what the person likes to buy so Care's
-      // suggestions stay personal over time. Supplementary, non-fatal on failure.
-      try {
-        const moss = getPersonalMemoryProvider();
-        await moss.save({ userId: ctx.userId, kind: "preference", text: `groceries: ${input.items.join(", ")}` });
-      } catch {
-        /* non-fatal: canonical list is already saved */
-      }
       return { ok: true, summary: `Grocery list created with ${input.items.length} item(s).`, data: { listId: rec.id, items: input.items } };
     },
   },

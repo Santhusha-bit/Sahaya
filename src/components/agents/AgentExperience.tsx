@@ -58,6 +58,7 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const applyState = useCallback((s: AgentStateResponse) => {
@@ -65,6 +66,18 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
     setApprovals(s.approvals.filter((a) => a.status === "pending"));
     setInbox(s.inbox.filter((e) => e.sourceAgent !== meta.id));
   }, [meta.id]);
+
+  /** Wellness: open a session whose greeting picks up from earlier conversations. */
+  const openSession = useCallback(async () => {
+    try {
+      const r = await fetch("/api/wellness/session");
+      const s = (await r.json()) as { sessionId?: string; greeting?: string };
+      setSessionId(s.sessionId ?? null);
+      setMessages([{ role: "assistant", content: s.greeting || meta.welcome }]);
+    } catch {
+      setMessages([{ role: "assistant", content: meta.welcome }]);
+    }
+  }, [meta.welcome]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,14 +90,32 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
           content: m.content,
           toolCalls: m.toolCalls,
         })) as ChatMessage[];
-        setMessages(hist.length ? hist : [{ role: "assistant", content: meta.welcome }]);
+        if (hist.length) setMessages(hist);
+        else if (meta.id === "wellness") void openSession();
+        else setMessages([{ role: "assistant", content: meta.welcome }]);
         applyState(s);
       })
       .catch(() => setMessages([{ role: "assistant", content: meta.welcome }]));
     return () => {
       cancelled = true;
     };
-  }, [meta.id, meta.welcome, applyState]);
+  }, [meta.id, meta.welcome, applyState, openSession]);
+
+  /** Wellness: close this conversation, then start fresh with what it remembers. */
+  const endConversation = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fetch("/api/wellness/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "end", ...(sessionId ? { sessionId } : {}) }),
+      });
+      await openSession();
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, sessionId, openSession]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -217,6 +248,15 @@ export function AgentExperience({ meta }: { meta: AgentMeta }) {
               >
                 ✨ Dashboard
               </Link>
+            )}
+            {meta.id === "wellness" && messages.length > 1 && (
+              <button
+                onClick={() => void endConversation()}
+                disabled={busy}
+                className="btn rounded-full bg-white/25 ring-1 ring-inset ring-white/25 px-3 py-1.5 text-xs font-semibold backdrop-blur transition-colors hover:bg-white/40 disabled:opacity-50"
+              >
+                End conversation
+              </button>
             )}
             <button
               onClick={() => setVoiceEnabled((v) => !v)}

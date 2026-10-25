@@ -12,7 +12,17 @@ import { createAgent } from "@/agents/registry";
 import { getConsent } from "@/agents/consent";
 import { AuditLog } from "@/agents/base/audit";
 import { wellnessIntegrationStatuses, cartesiaStatus, auth0Status, type IntegrationStatus } from "@/lib/env";
-import { getPersonalMemoryProvider, type ContinuityItem } from "@/integrations/moss";
+import { getPersonalMemoryProvider } from "@/integrations/moss";
+import { listContinuity } from "./continuityMemory";
+
+export interface ContinuityItem {
+  id: string;
+  kind: string;
+  text: string;
+  createdAt: number;
+  sync: string;
+  reason?: string;
+}
 import { getVoiceProvider } from "@/integrations/cartesia";
 import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
 import { activeObservations, type StoredObservation } from "./wellnessStore";
@@ -44,11 +54,21 @@ export async function buildWellnessDashboard(data: DataLayer, userId: string): P
   const consent = await getConsent(data, userId);
   const observations = (await activeObservations(wellness.memory)).slice().reverse();
 
-  // Personal memory (Moss) — tolerate provider failure.
+  // Continuity memory: the Convex ledger (what Wellness remembers, and whether
+  // each cue was synced to Moss or kept Convex-only). Tolerate failure.
   const moss = getPersonalMemoryProvider();
   let continuity: ContinuityItem[] = [];
   try {
-    continuity = consent.wellnessMemory ? await moss.list(userId, { limit: 20 }) : [];
+    continuity = consent.wellnessMemory
+      ? (await listContinuity(wellness.memory)).slice(0, 20).map((r) => ({
+          id: r.recordId,
+          kind: r.topic,
+          text: r.text,
+          createdAt: r.lastDiscussedAt,
+          sync: r.sync,
+          reason: r.reason,
+        }))
+      : [];
   } catch {
     continuity = [];
   }

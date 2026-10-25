@@ -27,7 +27,7 @@ interface Trend {
   direction: string;
   points: { value: number; at: number }[];
 }
-interface ContinuityItem { id: string; kind: string; text: string; createdAt: number }
+interface ContinuityItem { id: string; kind: string; text: string; createdAt: number; sync: string; reason?: string }
 interface Aggregate { metric: string; value: number; observationCount: number }
 interface AuditEntry { actor: string; action: string; at: number; detail?: Record<string, unknown> }
 interface Dashboard {
@@ -208,7 +208,12 @@ export default function WellnessDashboardPage() {
           <h2 className="eyebrow mt-7">Personal memory <span className="text-[var(--faint)] normal-case">· {data.backends.personalMemory}</span></h2>
           <section className="mt-2 flex flex-col gap-2">
             {data.continuity.map((c) => (
-              <div key={c.id} className="card p-3 text-[14px]"><span className="text-[var(--faint)]">{c.kind}:</span> {c.text}</div>
+              <div key={c.id} className="card p-3 text-[14px]">
+                <span className="text-[var(--faint)]">{c.kind}:</span> {c.text}
+                <div className="mt-1 text-[12px] text-[var(--faint)]">
+                  {c.sync === "synced" ? "Synced to Moss" : c.sync === "failed" ? "Moss sync failed, kept in Convex" : `Kept private in Convex${c.reason ? ` (${c.reason})` : ""}`}
+                </div>
+              </div>
             ))}
           </section>
         </>

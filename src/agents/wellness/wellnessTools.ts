@@ -3,6 +3,8 @@ import type { AgentTool } from "../base/types";
 import { extractObservations } from "./extractObservations";
 import { activeObservations, correctObservation, deleteObservation, saveObservation } from "./wellnessStore";
 import { readConsent } from "./wellnessConsent";
+import { forgetContinuity, purgeContinuity, syncContinuity } from "./continuityMemory";
+import { endWellnessSession, openWellnessSession } from "./continuitySession";
 import { runWellnessTurn } from "./wellnessWorkflow";
 import { getTimeSeriesProvider } from "@/integrations/tigerdata";
 import { updateHouseholdAnalytics } from "./householdAnalytics";
@@ -329,6 +331,8 @@ export const wellnessTools: AgentTool[] = [
         { audit: ctx.audit, correlationId: ctx.correlationId },
       );
       if (!updated) return { ok: false, summary: "I couldn't find that to correct.", error: "not_found" };
+      // Rebuild continuity cues so Moss never keeps the stale version.
+      await syncContinuity({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), audit: ctx.audit, correlationId: ctx.correlationId });
       return { ok: true, summary: "Thank you — I've corrected that.", data: { recordId: updated.recordId, version: updated.version } };
     },
   },
@@ -338,9 +342,47 @@ export const wellnessTools: AgentTool[] = [
     inputSchema: z.object({ recordId: z.string().min(1) }),
     async execute(input, ctx) {
       const ok = await deleteObservation(ctx.memory, input.recordId, { audit: ctx.audit, correlationId: ctx.correlationId });
+      // Continuity cues derived from it are rebuilt (and removed from Moss if nothing remains).
+      if (ok) await syncContinuity({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), audit: ctx.audit, correlationId: ctx.correlationId });
       return ok
         ? { ok: true, summary: "I've forgotten that, as you asked.", data: { recordId: input.recordId } }
         : { ok: false, summary: "I couldn't find that to forget.", error: "not_found" };
+    },
+  },
+  {
+    name: "openWellnessSession",
+    description: "Start a conversation. Retrieves what Wellness remembers from earlier conversations (consent-gated, verified against Convex) and returns a contextual opening question instead of the generic introduction.",
+    inputSchema: z.object({}),
+    async execute(_input, ctx) {
+      const s = await openWellnessSession({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), audit: ctx.audit });
+      return {
+        ok: true,
+        summary: s.greeting,
+        data: { sessionId: s.sessionId, greeting: s.greeting, returning: s.returning, basedOn: s.basedOn, retrieval: s.retrieval, memories: s.memories.map((m) => ({ topic: m.topic, text: m.text, sync: m.sync })) },
+      };
+    },
+  },
+  {
+    name: "endWellnessSession",
+    description: "End the current conversation: sync continuity cues for what was discussed and log a minimized (topics-only) session summary in Convex.",
+    inputSchema: z.object({ sessionId: z.string().optional() }),
+    async execute(input, ctx) {
+      const r = await endWellnessSession({ memory: ctx.memory, userId: ctx.userId, consent: await readConsent(ctx), sessionId: input.sessionId, audit: ctx.audit });
+      return { ok: true, summary: r.topics.length ? `I'll remember we talked about ${r.topics.join(", ")}.` : "Thanks for talking with me.", data: r };
+    },
+  },
+  {
+    name: "forgetContinuityMemory",
+    description: "Forget one thing Wellness remembers between conversations (or everything, with all=true). Removes it from Moss and marks it deleted in Convex; it won't come back unless the person raises it again.",
+    inputSchema: z.object({ recordId: z.string().optional(), all: z.boolean().optional() }),
+    async execute(input, ctx) {
+      if (input.all) {
+        const n = await purgeContinuity({ memory: ctx.memory, audit: ctx.audit });
+        return { ok: true, summary: "I've forgotten what I remembered between our conversations.", data: { removed: n } };
+      }
+      if (!input.recordId) return { ok: false, summary: "Which memory should I forget?", error: "missing_record" };
+      const ok = await forgetContinuity({ memory: ctx.memory, recordId: input.recordId, audit: ctx.audit });
+      return ok ? { ok: true, summary: "I've forgotten that, as you asked." } : { ok: false, summary: "I couldn't find that to forget.", error: "not_found" };
     },
   },
   {

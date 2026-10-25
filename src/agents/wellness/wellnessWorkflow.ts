@@ -22,8 +22,8 @@ import type { AuditLog } from "@/agents/base/audit";
 import type { ConsentSettings } from "@/agents/base/policy";
 import type { ScopedMemory } from "@/agents/base/types";
 import { getHistoricalContextProvider, type HistoryHit } from "@/integrations/backboard";
-import { getPersonalMemoryProvider } from "@/integrations/moss";
 import { getTimeSeriesProvider, type Trend } from "@/integrations/tigerdata";
+import { syncContinuity } from "./continuityMemory";
 import { extractObservations, type ExtractionResult } from "./extractObservations";
 import { activeObservations, saveObservation, type StoredObservation } from "./wellnessStore";
 
@@ -100,21 +100,13 @@ export async function runWellnessTurn(opts: {
     else savedCount++;
   }
 
-  // Step 5: Moss continuity (permitted). Failure is non-fatal.
+  // Step 5: continuity cues via the permission-aware adapter (Convex ledger
+  // canonical, minimized cues to Moss). A Moss failure is reported, not fatal.
   let continuitySaved = 0;
   if (consent.wellnessMemory) {
-    try {
-      const moss = getPersonalMemoryProvider();
-      for (const obs of extraction.accepted) {
-        if (obs.type === "mood" || obs.type === "social") {
-          await moss.save({ userId, kind: "note", text: `${obs.type}: ${obs.description ?? ""}`.trim() });
-          continuitySaved++;
-        }
-      }
-      syncs.push({ integration: "moss", mode: moss.backend === "moss" ? "live" : "sandbox", ok: true, detail: `${continuitySaved} continuity note(s) saved.` });
-    } catch (err) {
-      syncs.push({ integration: "moss", mode: "live", ok: false, detail: `Moss save failed: ${err instanceof Error ? err.message : String(err)}` });
-    }
+    const c = await syncContinuity({ memory, userId, consent, text: opts.text, audit: opts.audit, correlationId: opts.correlationId });
+    continuitySaved = c.upserted;
+    syncs.push({ integration: "moss", mode: c.backend === "moss" ? "live" : "sandbox", ok: c.mossOk, detail: c.detail });
   }
 
   // Step 6: Backboard — store a short de-identified summary + retrieve relevant history.
