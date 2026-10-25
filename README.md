@@ -149,6 +149,7 @@ planning. Open **Care → 🥕 Pantry** (`/care/pantry`):
 
 Demo: `npm run demo:pantry` (sandbox), or `npm run demo:pantry -- fridge.jpg` with
 `GEMINI_API_KEY` set for a real vision call. Tests: `tests/pantryNutrition.test.ts`.
+| **Coinbase x402** (Care pays for product data, Base Sepolia test USDC only) | `X402_WALLET_PRIVATE_KEY`+`X402_PAY_TO` set | throwaway key + local signature verifier, nothing settles (`npm run demo:x402`) |
 
 To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
 schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.

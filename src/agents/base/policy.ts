@@ -60,6 +60,15 @@ const paymentReview = z.object({
   itemCount: z.number().int().nonnegative(),
 });
 
+const paidServiceReceipt = z.object({
+  purchaseId: z.string().max(80),
+  service: z.string().max(120),
+  amountUsd: z.number().nonnegative().max(1),
+  network: z.string().max(40),
+  settlement: z.enum(["testnet", "sandbox"]),
+  authorizedBy: z.enum(["mandate", "approval"]),
+});
+
 const careAssistRequest = z.object({
   kind: z.enum(["meal", "grocery"]),
   note: z.string().max(300),
@@ -95,6 +104,14 @@ export const CROSS_AGENT_RULES: CrossAgentRule[] = [
     payload: paymentReview,
     consentKey: "careToFinance",
     description: "Care asks Finance to review a grocery payment before it is placed.",
+  },
+  {
+    source: "care",
+    target: "finance",
+    type: "x402.receipt",
+    payload: paidServiceReceipt,
+    consentKey: "careToFinance",
+    description: "Care tells Finance about a small x402 test payment it made for product data.",
   },
   {
     source: "wellness",

@@ -18,6 +18,7 @@ import { backendLabel, prepareCartFromDiscovery, runGroceryDiscovery, usualGroce
 import { comparePrices, freshnessOf, type CandidateProduct, type PriceComparison } from "./priceCompare";
 import { CATALOG } from "./catalog";
 import { pantryTools } from "./pantryTools";
+import { paidServiceTools } from "./paidServices/paidServiceTools";
 
 /**
  * Resolve the person's on-file contact number for outbound Twilio notifications.
@@ -633,4 +634,5 @@ export const careTools: AgentTool[] = [
     },
   },
   ...pantryTools,
+  ...paidServiceTools,
 ];
