@@ -2,6 +2,7 @@ import { BaseAgent, type AgentConfig, type SandboxPlan } from "../base/BaseAgent
 import type { AgentEvent, AgentTask, AgentTool, ToolContext } from "../base/types";
 import { financePrompt } from "./financePrompt";
 import { financeTools } from "./financeTools";
+import { getConnection } from "./nessie/service";
 
 export class FinanceAgent extends BaseAgent {
   readonly config: AgentConfig = {
@@ -16,6 +17,7 @@ export class FinanceAgent extends BaseAgent {
       "What subscriptions am I paying for?",
       "Is my care facility invoice correct?",
       "What was my spending this month?",
+      "Connect my bank account",
     ],
     theme: {
       accent: "#5a6acf",
@@ -79,13 +81,24 @@ export class FinanceAgent extends BaseAgent {
     return super.handleEvent(event);
   }
 
-  protected async sandboxPlan(message: string, _ctx: ToolContext): Promise<SandboxPlan> {
+  protected async sandboxPlan(message: string, ctx: ToolContext): Promise<SandboxPlan> {
     const m = message.toLowerCase();
-    if (/subscription|recurring|auto.?pay|paying for/.test(m)) {
-      return { reply: "Let me scan your charges for recurring payments.", toolCalls: [{ name: "detectRecurringCharges", input: {} }] };
+    if (/disconnect|unlink|revoke/.test(m) && /bank|account|checking/.test(m)) {
+      return { reply: "I'll stop reading that account.", toolCalls: [{ name: "disconnectBankAccount", input: {} }] };
     }
-    if (/spend|spending|transactions|this month/.test(m)) {
-      return { reply: "Here's a look at your recent authorized spending.", toolCalls: [{ name: "analyzeAuthorizedTransactions", input: { days: 30 } }] };
+    if (/(connect|link|add).*(bank|checking|account|capital one)/.test(m)) {
+      return { reply: "To review your spending I need your OK to read your checking account. Please approve it below.", toolCalls: [{ name: "connectSandboxBankAccount", input: {} }] };
+    }
+    const bankQuestion = /subscription|recurring|auto.?pay|paying for|spend|spending|transactions|this month|new charge|double.?charge|charged twice|duplicate|review my (account|bank)/.test(m);
+    if (bankQuestion) {
+      const conn = await getConnection(ctx.memory);
+      if (conn?.data.status !== "authorized") {
+        return {
+          reply: "I can review that from your bank account, but first I need your OK to read it. Please approve it below, then ask me again.",
+          toolCalls: [{ name: "connectSandboxBankAccount", input: {} }],
+        };
+      }
+      return { reply: "Let me review your account.", toolCalls: [{ name: "runSpendingAnalysis", input: {} }] };
     }
     if (/facility|care home|nursing/.test(m)) {
       return {

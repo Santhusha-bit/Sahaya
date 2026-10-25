@@ -85,6 +85,7 @@ Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
 | **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
 | **Apify** (grocery product search) | `APIFY_TOKEN` set | sandbox store catalog (per item, labeled) |
 | **Checkout + tracking** | never (no commerce credentials) | sandbox checkout, Visa test-card reference, demo-paced tracking |
+| **Capital One Nessie** (sandbox bank data for Finance) | `NESSIE_API_KEY` set | local emulator with the same Nessie API shapes |
 
 ### Accessible voice shopping (Visa "Reimagining shopping")
 
@@ -150,6 +151,29 @@ planning. Open **Care → 🥕 Pantry** (`/care/pantry`):
 Demo: `npm run demo:pantry` (sandbox), or `npm run demo:pantry -- fridge.jpg` with
 `GEMINI_API_KEY` set for a real vision call. Tests: `tests/pantryNutrition.test.ts`.
 | **Coinbase x402** (Care pays for product data, Base Sepolia test USDC only) | `X402_WALLET_PRIVATE_KEY`+`X402_PAY_TO` set | throwaway key + local signature verifier, nothing settles (`npm run demo:x402`) |
+
+### Finance spending review (Capital One Nessie)
+
+Open **`/money`** (or "Review my spending" on Home, or "🏦 Spending" in Finance), or
+just ask Finance "What subscriptions am I paying for?". Flow: Finance asks to read the
+checking account (an **approval card**, read-only) → on approval it sets up a Nessie
+customer + "Everyday Checking" account and posts ~3 months of test purchases →
+it reads purchases **only from the authorized account** → Claude categorizes them
+(labels validated in code; rules without a key) → code finds possible double charges,
+monthly subscriptions and price increases, and builds the monthly summary → suggested
+actions the person accepts or dismisses → everything saved in Finance's memory
+(Convex `memories` table when `NEXT_PUBLIC_CONVEX_URL` is set).
+
+Demo: in `/money` open "Demo: add a sandbox transaction" → **Post a double charge**
+(the bank re-posts the latest purchase) → **Review my spending again**: Finance lists
+it under "New since last review" flagged *possible duplicate* and suggests a dispute.
+
+Code-enforced: the account id never comes from model input; only the last 4 digits
+are stored; Finance has no tool that creates purchases (the demo poster is outside
+the agent); accepting a suggestion only drafts a dispute or adds a to-do, nothing is
+sent or cancelled. Terminal walkthrough: `npm run demo:nessie`. Tests:
+`tests/nessie.test.ts`. Optional env: `NESSIE_API_KEY`, `NESSIE_BASE_URL`
+(default `https://api.nessieisreal.com`).
 
 To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
 schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.

@@ -7,8 +7,126 @@ import { createFinanceAssistanceBridge, requestFinancialAssistance } from "@/int
 import { getDataLayer } from "../base/dataLayer";
 import { getCurrentUser } from "@/lib/user";
 import { auth0Status, jiraStatus } from "@/lib/env";
+import { getNessieClient } from "@/integrations/nessie";
+import {
+  BankNotAuthorizedError,
+  connectBank,
+  currentSuggestions,
+  decideSuggestion,
+  fetchAuthorizedTransactions,
+  revokeBank,
+  runSpendingAnalysis,
+} from "./nessie/service";
+
+const notConnected = (err: unknown) =>
+  err instanceof BankNotAuthorizedError
+    ? { ok: false, summary: err.message, error: "bank_not_authorized" }
+    : null;
+
+/** Capital One Nessie: authorized bank data -> spending review. */
+const bankTools: AgentTool[] = [
+  {
+    name: "connectSandboxBankAccount",
+    description:
+      "Ask the person to let Finance read purchases from their Capital One (Nessie sandbox) checking account. Needs their approval. Read-only: Finance can never move money or create purchases.",
+    inputSchema: z.object({}),
+    requiresApproval: true,
+    approvalSummary: () => ({
+      title: "Let Finance read your checking account",
+      description:
+        "Finance will read purchases from your Capital One sandbox checking account to review spending. Read-only: it cannot move money. You can disconnect any time.",
+    }),
+    async execute(_input, ctx) {
+      const { connection, created } = await connectBank({ memory: ctx.memory, nessie: getNessieClient() });
+      return {
+        ok: true,
+        summary: `Connected ${connection.nickname} ending ${connection.last4} (${connection.backend === "live" ? "Capital One Nessie" : "Nessie sandbox emulator"}, read-only).${created ? ` ${connection.purchasesSeeded} test purchases loaded.` : ""}`,
+        data: { last4: connection.last4, backend: connection.backend, created },
+      };
+    },
+  },
+  {
+    name: "fetchBankTransactions",
+    description: "List purchases from the person's connected (authorized) bank account. Only works after they approved access.",
+    inputSchema: z.object({ days: z.number().int().min(1).max(120).default(30) }),
+    async execute(input, ctx) {
+      try {
+        const { connection, transactions } = await fetchAuthorizedTransactions({ memory: ctx.memory, nessie: getNessieClient() }, { days: input.days });
+        const total = transactions.reduce((s, t) => s + (t.status === "cancelled" ? 0 : t.amount), 0);
+        return {
+          ok: true,
+          summary: `${transactions.length} purchase(s) in the last ${input.days} days on ${connection.nickname} ending ${connection.last4}, totaling $${total.toFixed(2)}.`,
+          data: { transactions: transactions.map(({ date, merchant, amount, status }) => ({ date, merchant, amount, status })) },
+        };
+      } catch (err) {
+        const blocked = notConnected(err);
+        if (blocked) return blocked;
+        throw err;
+      }
+    },
+  },
+  {
+    name: "runSpendingAnalysis",
+    description:
+      "Review the connected bank account: categorize every purchase, find possible double charges and subscriptions (including price increases), build this month's spending summary, flag purchases that are new since the last review, and save suggested actions for the person to accept or dismiss.",
+    inputSchema: z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("YYYY-MM; defaults to this month") }),
+    async execute(input, ctx) {
+      try {
+        const { analysis, analysisId } = await runSpendingAnalysis(
+          { memory: ctx.memory, nessie: getNessieClient(), tasks: ctx.tasks },
+          { month: input.month },
+        );
+        const suggestions = await currentSuggestions(ctx.memory);
+        return {
+          ok: true,
+          summary: analysis.spoken,
+          data: {
+            analysisId,
+            month: analysis.month,
+            total: analysis.summary.total,
+            previousTotal: analysis.summary.previousTotal,
+            topCategories: analysis.summary.byCategory.slice(0, 4).map((c) => ({ category: c.label, total: c.total })),
+            subscriptions: analysis.subscriptions.map((s) => ({ merchant: s.merchant, monthly: s.monthlyAmount, priceIncrease: s.priceIncrease })),
+            duplicates: analysis.duplicates.map((d) => ({ merchant: d.merchant, amount: d.amount, dates: d.dates })),
+            newTransactions: analysis.newTransactions,
+            categorizedBy: analysis.reviewer,
+            pendingSuggestions: suggestions.filter((s) => s.status === "suggested").map((s) => ({ actionId: s.id, title: s.title })),
+          },
+        };
+      } catch (err) {
+        const blocked = notConnected(err);
+        if (blocked) return blocked;
+        throw err;
+      }
+    },
+  },
+  {
+    name: "reviewSuggestedAction",
+    description:
+      "Record the person's decision on one suggestion from the spending review. Only call this when the person has clearly said accept or dismiss for that specific suggestion. Accepting a double-charge suggestion only drafts a dispute (sending it needs requestFinancialApproval); accepting a subscription suggestion adds a to-do, Finance never cancels anything itself.",
+    inputSchema: z.object({ actionId: z.string().min(1), decision: z.enum(["accept", "dismiss"]) }),
+    async execute(input, ctx) {
+      const { outcome, disputeId } = await decideSuggestion({ memory: ctx.memory, tasks: ctx.tasks }, input.actionId, input.decision);
+      return { ok: true, summary: outcome, data: { disputeId } };
+    },
+  },
+  {
+    name: "disconnectBankAccount",
+    description: "Revoke Finance's read access to the connected bank account.",
+    inputSchema: z.object({}),
+    async execute(_input, ctx) {
+      const revoked = await revokeBank(ctx.memory);
+      return {
+        ok: true,
+        summary: revoked ? "Disconnected. Finance can no longer read that account." : "No bank account was connected.",
+        data: { revoked },
+      };
+    },
+  },
+];
 
 export const financeTools: AgentTool[] = [
+  ...bankTools,
   {
     name: "analyzeMedicalBill",
     description: "Break down a medical bill into line items, compute the total, and flag unusual or duplicate charges.",

@@ -83,6 +83,13 @@ export default function HomePage() {
         >
           🛒 Order my groceries
         </Link>
+        <Link
+          href="/money"
+          className="btn card card-interactive mt-3 flex min-h-14 items-center justify-center gap-2 px-4 text-[17px] font-bold"
+          style={{ color: "#3b449c" }}
+        >
+          🏦 Review my spending
+        </Link>
       </section>
 
       {/* Agent grid (2x2) */}
