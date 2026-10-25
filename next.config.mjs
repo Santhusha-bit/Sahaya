@@ -5,7 +5,10 @@ const nextConfig = {
   serverExternalPackages: ["@factory/droid-sdk", "droid"],
   outputFileTracingIncludes: {
     // Investigations start from the investigate screen or from a Finance chat turn.
-    "/api/**/*": ["./node_modules/@factory/cli-*/**/*"],
+    // Only those two routes get the ~600 MB CLI binary: adding it to every route stops
+    // Vercel from grouping functions and exceeds the Hobby 12-function limit.
+    "/api/finance/investigations": ["./node_modules/@factory/cli-*/**/*"],
+    "/api/agents/*/message": ["./node_modules/@factory/cli-*/**/*"],
   },
   async headers() {
     return [
