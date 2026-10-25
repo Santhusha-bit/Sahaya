@@ -83,6 +83,26 @@ Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
 | **Cartesia** (voice TTS) | `CARTESIA_API_KEY` set | browser SpeechSynthesis |
 | **Auth0** | `AUTH0_DOMAIN`+`AUTH0_CLIENT_ID` set | single demo user |
 | **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
+| **Gemini** (Care pantry-photo vision) | `GEMINI_API_KEY` set | fixed sample fridge detection (labeled sandbox) |
+
+### Gemini: nutrition and meal assistance (Care)
+
+Gemini has one distinct multimodal job: look at a fridge/pantry photo and propose
+ingredients. Claude still does the conversation; a deterministic planner does the meal
+planning. Open **Care → 🥕 Pantry** (`/care/pantry`):
+
+1. Margaret photographs her refrigerator or pantry (downscaled in the browser, never stored).
+2. Care sends it to Gemini (`GEMINI_MODEL`, default `gemini-3.8-flash`, via `generateContent`).
+3. `pantryPolicy.ts` validates the result in code: clear items are pre-confirmed, items
+   under 75% confidence are held back, and text read off notes/labels is rejected.
+4. Care asks Margaret to confirm the uncertain items (planning is refused until she does).
+5. `mealPlanner.ts` combines confirmed ingredients with her preferences (allergies and
+   vegetarian are hard filters; low sodium, soft foods, dislikes, prep time).
+6. Care proposes a recipe and drafts a grocery list of missing items. Ordering still goes
+   through the normal approval gate.
+
+Demo: `npm run demo:pantry` (sandbox), or `npm run demo:pantry -- fridge.jpg` with
+`GEMINI_API_KEY` set for a real vision call. Tests: `tests/pantryNutrition.test.ts`.
 
 To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
 schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.

@@ -19,6 +19,7 @@ function has(name: string): boolean {
 
 export const AGENT_MODEL = process.env.AGENT_MODEL?.trim() || "claude-opus-4-8";
 export const AGENT_BITDEER_MODEL = process.env.BITDEER_MODEL?.trim() || "deepseek-ai/DeepSeek-V4-Flash";
+export const AGENT_GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
 
 export function claudeStatus(): IntegrationStatus {
   const live = has("ANTHROPIC_API_KEY");
@@ -152,6 +153,18 @@ export function bitdeerStatus(): IntegrationStatus {
   };
 }
 
+export function geminiStatus(): IntegrationStatus {
+  const live = has("GEMINI_API_KEY");
+  return {
+    key: "gemini",
+    label: "Gemini (pantry photo vision)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? `Live: Care sends pantry/fridge photos to ${AGENT_GEMINI_MODEL} to propose ingredients. Output is schema-validated in code; uncertain items are confirmed with the person before meal planning.`
+      : "Sandbox: a fixed sample fridge detection stands in for Gemini (the photo is not analyzed); the same validation, confirmation and meal planning apply.",
+  };
+}
+
 export function backboardStatus(): IntegrationStatus {
   const live = has("BACKBOARD_API_KEY");
   return {
@@ -201,10 +214,16 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     armadinStatus(),
     mossStatus(),
     bitdeerStatus(),
+    geminiStatus(),
     backboardStatus(),
     tigerDataStatus(),
     snowflakeStatus(),
   ];
+}
+
+/** Integrations most relevant to Care's pantry-to-dinner flow. */
+export function pantryIntegrationStatuses(): IntegrationStatus[] {
+  return [geminiStatus(), claudeStatus(), convexStatus()];
 }
 
 /** Integrations most relevant to the Wellness agent, for its dashboard. */
