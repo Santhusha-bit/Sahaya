@@ -70,6 +70,14 @@ export default function HomePage() {
           </Link>
           <p className="mt-3 text-[13px] font-medium text-[var(--muted)]">Tap to speak</p>
         </div>
+
+        <Link
+          href="/shop"
+          className="btn card card-interactive mt-6 flex min-h-14 items-center justify-center gap-2 px-4 text-[17px] font-bold"
+          style={{ color: "#2f5586" }}
+        >
+          🛒 Order my groceries
+        </Link>
       </section>
 
       {/* Agent grid (2x2) */}

@@ -83,6 +83,27 @@ Every integration reports `live` / `sandbox` / `unavailable` on **Profile** and
 | **Cartesia** (voice TTS) | `CARTESIA_API_KEY` set | browser SpeechSynthesis |
 | **Auth0** | `AUTH0_DOMAIN`+`AUTH0_CLIENT_ID` set | single demo user |
 | **Moss** (personal memory) | `MOSS_API_KEY` set | Convex/in-process memory |
+| **Apify** (grocery product search) | `APIFY_TOKEN` set | sandbox store catalog (per item, labeled) |
+| **Checkout + tracking** | never (no commerce credentials) | sandbox checkout, Visa test-card reference, demo-paced tracking |
+
+### Accessible voice shopping (Visa "Reimagining shopping")
+
+Open **`/shop`** on a phone (or tap "Order my groceries" on Home, or "🛒 Groceries" in
+Care). Flow: Margaret says "I need my usual groceries" → Care reads her order history
+and preferences (usual items = bought in at least half of past orders) → product
+search (Apify `apify~e-commerce-scraping-tool` when live) → the **deterministic
+substitution policy** (`src/agents/care/shopping/substitution.ts`) picks her usual
+brand, a reasonable swap within 30% of her usual price that respects dietary rules
+(e.g. low-sodium) and dislikes (e.g. skim), or leaves the item off and says why →
+an accessible cart (large type, plain-language reasons, one clear total, read-aloud)
+→ she taps **Approve and pay $X** → sandbox checkout → live tracking timeline.
+
+Code-enforced safety: approval is bound to the cart's id, hash and total; checkout
+refuses a changed, superseded, already-ordered or over-limit cart; a spoken "yes"
+never approves. The demo **ends at a sandbox checkout**: no card number is stored and
+no money moves. Terminal walkthrough: `npm run demo:shopping`. Tests:
+`tests/shopping.test.ts`. Optional env: `APIFY_TOKEN`, `APIFY_ACTOR_ID`,
+`APIFY_MARKETPLACES`, `APIFY_TIMEOUT_MS`, `SHOP_TRACKING_STEP_MS`.
 
 To run the Convex backend: `npx convex dev` (generates `convex/_generated`, deploys the
 schema + functions), set `NEXT_PUBLIC_CONVEX_URL`, restart. The app auto-switches.

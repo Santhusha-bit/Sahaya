@@ -104,6 +104,13 @@ export class ApprovalService {
     return a;
   }
 
+  /** Expire a still-pending approval owned by this agent (e.g. its cart was replaced). */
+  async expire(approvalId: string): Promise<Approval | null> {
+    const a = await this.get(approvalId);
+    if (!a || a.status !== "pending") return null;
+    return this.store.patch(approvalId, { status: "expired", decidedAt: now() });
+  }
+
   async list(status?: Approval["status"]): Promise<Approval[]> {
     return this.store.list({ userId: this.userId, agentId: this.agentId, status });
   }

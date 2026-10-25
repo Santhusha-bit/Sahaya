@@ -5,6 +5,15 @@ import { getPersonalMemoryProvider } from "@/integrations/moss";
 import { requestCareAssistance } from "@/integrations/fetchai";
 import { createWorkItemStore } from "@/integrations/jira";
 import { getDataLayer } from "../base/dataLayer";
+import { cartHash } from "./shopping/cart";
+import {
+  buildUsualCart,
+  checkoutCart,
+  loadProfile,
+  removeCartItem,
+  requestCartApproval,
+  trackLatestOrder,
+} from "./shopping/service";
 
 /**
  * Resolve the person's on-file contact number for outbound Twilio notifications.
@@ -194,7 +203,8 @@ export const careTools: AgentTool[] = [
   },
   {
     name: "searchProducts",
-    description: "Search the store catalog for products matching a query or list of item names.",
+    description:
+      "Search the small store catalog for ad-hoc items (use with createShoppingCart). For the person's usual groceries use buildUsualCart instead.",
     inputSchema: z.object({ query: z.string().min(1) }),
     async execute(input) {
       const terms = input.query.toLowerCase().split(/[,\s]+/).filter(Boolean);
@@ -228,57 +238,134 @@ export const careTools: AgentTool[] = [
         };
       });
       const total = Number(lines.reduce((s: number, l: { lineTotal: number }) => s + l.lineTotal, 0).toFixed(2));
-      const rec = await ctx.memory.save("carts", { lines, total, status: "ready" }, { tags: ["cart"] });
+      const hash = cartHash(lines.map((l: { productId: string; quantity: number; price: number }) => ({ ...l, unitPrice: l.price })), total);
+      const rec = await ctx.memory.save("carts", { lines, total, cartHash: hash, status: "ready" }, { tags: ["cart"] });
       return {
         ok: true,
         summary: `Cart ready: ${lines.length} item(s), total $${total.toFixed(2)}.`,
-        data: { cartId: rec.id, lines, total },
+        data: { cartId: rec.id, cartHash: hash, lines, total },
+      };
+    },
+  },
+  {
+    name: "getShoppingProfile",
+    description:
+      "Retrieve the person's shopping history and preferences: usual items (derived from past orders), preferred brands, dietary rules, spending limit and saved payment method label.",
+    inputSchema: z.object({}),
+    async execute(_input, ctx) {
+      const { profile, history } = await loadProfile(ctx.memory);
+      return {
+        ok: true,
+        summary: `${profile.usualItems.length} usual item(s) from ${history.length} past order(s); spending limit $${profile.spendingLimit}.`,
+        data: {
+          usualItems: profile.usualItems.map((i) => ({
+            key: i.key,
+            label: i.label,
+            preferredBrand: i.preferredBrand,
+            timesOrdered: i.timesOrdered,
+            allowSubstitution: i.allowSubstitution,
+          })),
+          avoid: profile.avoidTags,
+          dislikes: profile.dislikedTerms,
+          spendingLimit: profile.spendingLimit,
+          payment: profile.paymentMethod.label,
+          recentOrders: history.slice(0, 3),
+        },
+      };
+    },
+  },
+  {
+    name: "buildUsualCart",
+    description:
+      "Build the person's usual grocery cart end to end: read history/preferences, search products (Apify when live), apply the substitution policy, compute a clear total, and (by default) request the person's approval for that exact cart. Use this when they ask for their usual groceries.",
+    inputSchema: z.object({
+      exclude: z.array(z.string()).optional().describe("Usual item keys to leave out, e.g. ['eggs']"),
+      requestApproval: z.boolean().default(true),
+    }),
+    async execute(input, ctx) {
+      const built = await buildUsualCart(ctx, { exclude: input.exclude });
+      const approval = input.requestApproval ? await requestCartApproval(ctx, built) : null;
+      const subs = built.cart.lines.filter((l) => l.decision === "substituted").length;
+      const skips = built.cart.lines.filter((l) => l.decision === "skipped").length;
+      return {
+        ok: true,
+        summary: `Cart ready: ${built.cart.lines.length - skips} item(s), total $${built.cart.total.toFixed(2)}${subs ? `, ${subs} substitution(s)` : ""}${skips ? `, ${skips} left off` : ""}.${approval ? " Waiting for your approval." : ""}`,
+        approvalId: approval?.id,
+        data: {
+          cartId: built.cartId,
+          cartHash: built.cart.cartHash,
+          total: built.cart.total,
+          deliveryFee: built.cart.deliveryFee,
+          lines: built.cart.lines.map((l) => ({ item: l.label, decision: l.decision, product: l.productName, price: l.lineTotal, reason: l.reason })),
+          searchBackend: built.searchBackend,
+          spoken: built.spoken,
+          approvalId: approval?.id ?? null,
+        },
+      };
+    },
+  },
+  {
+    name: "removeCartItem",
+    description: "Remove one item from the current cart. This creates an updated cart with a new total and a fresh approval request.",
+    inputSchema: z.object({ cartId: z.string().min(1), itemKey: z.string().min(1) }),
+    async execute(input, ctx) {
+      const built = await removeCartItem(ctx, input.cartId, input.itemKey);
+      if (!built) return { ok: false, summary: "I couldn't change that cart (it may already be ordered).", error: "cart_not_editable" };
+      const approval = await requestCartApproval(ctx, built);
+      return {
+        ok: true,
+        summary: `Removed it. New total $${built.cart.total.toFixed(2)}.`,
+        approvalId: approval.id,
+        data: { cartId: built.cartId, cartHash: built.cart.cartHash, total: built.cart.total, approvalId: approval.id },
       };
     },
   },
   {
     name: "requestOrderApproval",
     description:
-      "Request the person's approval to place a grocery order for a cart. Required before any purchase. After approval the order is placed and (if enabled) sent to Finance for a payment review.",
-    inputSchema: z.object({ cartId: z.string().min(1) }),
+      "Request the person's approval to buy a cart, then check out. Required before any purchase. Pass the cartId, cartHash and total from the cart so the approval is bound to exactly what they saw. After approval the order is placed (sandbox checkout) and Finance reviews the payment.",
+    inputSchema: z.object({
+      cartId: z.string().min(1),
+      cartHash: z.string().optional(),
+      total: z.number().nonnegative().optional(),
+    }),
     requiresApproval: true,
     approvalSummary: (input) => ({
-      title: "Place grocery order",
-      description: `Care wants to place the order for cart ${input.cartId}. Approve to purchase.`,
+      title: input.total !== undefined ? `Buy groceries for $${input.total.toFixed(2)}` : "Place grocery order",
+      description: `Care wants to place the order for this cart${input.total !== undefined ? ` ($${input.total.toFixed(2)})` : ""}. Approve to purchase.`,
     }),
     async execute(input, ctx) {
-      const cart = await ctx.memory.get(input.cartId);
-      if (!cart) return { ok: false, summary: "That cart no longer exists.", error: "cart_not_found" };
-      const total = Number(cart.data.total ?? 0);
-      const lines = (cart.data.lines as unknown[]) ?? [];
-      const order = await ctx.memory.save(
-        "orders",
-        { cartId: input.cartId, total, itemCount: lines.length, status: "placed" },
-        { tags: ["order"] },
-      );
-      await ctx.tasks.create({
+      // Approval alone is not enough: checkout re-verifies in code that the cart
+      // is unchanged, not already ordered, and within the spending limit.
+      const placed = await checkoutCart(ctx, input);
+      if (!placed.ok) return { ok: false, summary: placed.message, error: placed.refusal };
+      const { orderId, total, itemCount } = placed;
+      const task = await ctx.tasks.create({
         title: `Grocery order ($${total.toFixed(2)})`,
-        steps: ["Approved", "Placed", "Out for delivery", "Delivered"],
+        steps: ["Approved", "Placed", "Packed", "Out for delivery", "Delivered"],
         status: "in_progress",
         correlationId: ctx.correlationId,
       });
+      await ctx.tasks.advanceStep(task.id, "Approved", "done");
+      await ctx.tasks.advanceStep(task.id, "Placed", "done", placed.placed.orderRef);
+      await ctx.memory.update(orderId, { taskId: task.id });
       // Atlassian Jira (controlled action review): mirror the placed order to the
       // work-item store so caregivers have a reviewable record. Live with ATLASSIAN_*
       // credentials (a Jira issue is created); otherwise the same reviewable sandbox
-      // store. Best-effort — a Jira failure never blocks the order the person approved.
+      // store. Best-effort: a Jira failure never blocks the order the person approved.
       let reviewBackend: string | null = null;
       let reviewItemId: string | null = null;
       try {
         const { service, backend } = createWorkItemStore();
         const item = await service.propose({
           userId: ctx.userId,
-          requestedAction: `Grocery order placed: ${lines.length} item(s), $${total.toFixed(2)}`,
+          requestedAction: `Grocery order placed: ${itemCount} item(s), $${total.toFixed(2)}`,
           toolName: "requestOrderApproval",
           requestingAgent: "care",
           assignedAgent: "care",
           permissionScope: "care:order",
           requiredRole: "caregiver",
-          input: { cartId: input.cartId, orderId: order.id, total },
+          input: { cartId: input.cartId, orderId, total },
         });
         reviewBackend = backend;
         reviewItemId = item.id;
@@ -292,12 +379,39 @@ export const careTools: AgentTool[] = [
         type: "payment.review",
         userId: ctx.userId,
         correlationId: ctx.correlationId,
-        payload: { orderId: order.id, amount: total, merchant: "Sahaya Grocery", itemCount: lines.length },
+        payload: { orderId, amount: total, merchant: "Sahaya Grocery (sandbox)", itemCount },
       });
       return {
         ok: true,
-        summary: `Order placed for $${total.toFixed(2)}.${review.ok ? " Finance will review the payment." : ""}`,
-        data: { orderId: order.id, financeReview: review.ok, review: reviewItemId ? { backend: reviewBackend, itemId: reviewItemId } : null },
+        summary: `Order placed for $${total.toFixed(2)} (sandbox checkout, no real payment). Order ${placed.placed.orderRef}.${review.ok ? " Finance will review the payment." : ""}`,
+        data: {
+          orderId,
+          orderRef: placed.placed.orderRef,
+          checkout: placed.placed.backend,
+          notice: placed.placed.notice,
+          financeReview: review.ok,
+          review: reviewItemId ? { backend: reviewBackend, itemId: reviewItemId } : null,
+        },
+      };
+    },
+  },
+  {
+    name: "trackOrder",
+    description: "Check the delivery status of the person's most recent grocery order (or a given orderId).",
+    inputSchema: z.object({ orderId: z.string().optional() }),
+    async execute(input, ctx) {
+      const t = await trackLatestOrder(ctx, input.orderId);
+      if (!t) return { ok: true, summary: "You don't have any grocery orders yet.", data: { order: null } };
+      const taskId = typeof t.order.taskId === "string" ? t.order.taskId : null;
+      if (taskId) {
+        const labels: Record<string, string> = { packed: "Packed", out_for_delivery: "Out for delivery", delivered: "Delivered" };
+        for (const s of t.steps) if (s.done && labels[s.stage]) await ctx.tasks.advanceStep(taskId, labels[s.stage], "done");
+        if (t.current.stage === "delivered") await ctx.tasks.setStatus(taskId, "completed", "Delivered");
+      }
+      return {
+        ok: true,
+        summary: `Your order is: ${t.current.label.toLowerCase()}.`,
+        data: { orderId: t.orderId, orderRef: t.order.orderRef, status: t.current.stage, steps: t.steps },
       };
     },
   },

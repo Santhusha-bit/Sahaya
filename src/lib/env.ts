@@ -188,6 +188,28 @@ export function snowflakeStatus(): IntegrationStatus {
   };
 }
 
+export function apifyStatus(): IntegrationStatus {
+  const live = has("APIFY_TOKEN");
+  return {
+    key: "apify",
+    label: "Apify (product search)",
+    mode: live ? "live" : "sandbox",
+    detail: live
+      ? `Live: Care searches real product listings by running the ${process.env.APIFY_ACTOR_ID?.trim() || "apify~e-commerce-scraping-tool"} Actor. Any item the live search cannot find falls back to the sandbox catalog and is labeled as such.`
+      : "Sandbox: Care searches a local store catalog with the same interface (set APIFY_TOKEN for live product search).",
+  };
+}
+
+export function checkoutStatus(): IntegrationStatus {
+  return {
+    key: "checkout",
+    label: "Checkout + order tracking",
+    mode: "sandbox",
+    detail:
+      "Sandbox: the shopping demo ends at a sandbox checkout charged to a saved Visa test card reference (no card number is stored, no money moves). Tracking runs on a demo-paced timeline.",
+  };
+}
+
 export function allIntegrationStatuses(): IntegrationStatus[] {
   return [
     claudeStatus(),
@@ -204,6 +226,8 @@ export function allIntegrationStatuses(): IntegrationStatus[] {
     backboardStatus(),
     tigerDataStatus(),
     snowflakeStatus(),
+    apifyStatus(),
+    checkoutStatus(),
   ];
 }
 
