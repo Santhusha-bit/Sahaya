@@ -81,14 +81,17 @@ export function twilioStatus(): IntegrationStatus {
 }
 
 export function fetchaiStatus(): IntegrationStatus {
-  const live = has("FETCHAI_BRIDGE_URL");
+  const agents = ["wellness", "care", "finance"].filter(
+    (a) => has(`FETCHAI_${a.toUpperCase()}_URL`) || (a === "wellness" && has("FETCHAI_BRIDGE_URL")),
+  );
+  const live = agents.length > 0;
   return {
     key: "fetchai",
     label: "Fetch.ai uAgents (agent messaging)",
     mode: live ? "live" : "unavailable",
     detail: live
-      ? "Live — typed messages exchanged with the Python uAgents bridge over local HTTP."
-      : "Unavailable — Python/uAgents bridge not configured; agent-to-agent messaging runs on the in-process bus (not labeled Fetch.ai).",
+      ? `Live: ${agents.join(", ")} -> Guardian requests travel as signed uAgents messages between independent agent processes.`
+      : "Unavailable: no uAgent URL configured; agent-to-agent messaging runs on the in-process bus (not labeled Fetch.ai).",
   };
 }
 

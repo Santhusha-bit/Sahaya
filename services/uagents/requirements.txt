@@ -1,2 +1,4 @@
-# Fetch.ai uAgents bridge (Track 5). Pinned to the version verified in the docs.
+# Fetch.ai uAgents. Pinned to the version verified locally (Python 3.13).
 uagents==0.26.1
+# HTTP client Guardian uses to reach the TS Guardian agent (also a uagents dependency).
+aiohttp>=3.9

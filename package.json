@@ -18,6 +18,8 @@
     "demo:approval": "vite-node --config vitest.config.ts scripts/demo-approval.ts",
     "demo:search": "vite-node --config vitest.config.ts scripts/demo-search.ts",
     "demo:agents": "vite-node --config vitest.config.ts scripts/demo-agents.ts",
+    "demo:a2a": "vite-node --config vitest.config.ts scripts/demo-a2a.ts",
+    "uagents": "cd services/uagents && python bridge.py",
     "serve:guardian": "vite-node --config vitest.config.ts scripts/serve-guardian.ts",
     "demo:bitdeer": "vite-node --config vitest.config.ts scripts/demo-bitdeer.ts",
     "demo:wellness-memory": "vite-node --config vitest.config.ts scripts/demo-wellness-memory.ts",
