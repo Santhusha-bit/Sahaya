@@ -11,7 +11,7 @@
  */
 
 import { id, now } from "@/lib/id";
-import { getIncidentIndex, redactPII, scamTypeFromSignals } from "@/integrations/search";
+import { incidentSearchPermitted, indexIncident } from "./incidentIndexer";
 import { sendSms } from "@/integrations/twilio";
 import type { ToolContext } from "../base/types";
 import {
@@ -228,22 +228,18 @@ export async function runScamScreening(
     detail: { incidentId: incident.id, outcome, caregiversAlerted: incident.visibility.caregiversAlerted },
   });
 
-  // Index job: PII-redacted summary goes to the incident search index.
-  await getIncidentIndex().index({
-    incidentId: incident.id,
-    userId: ctx.userId,
-    channel,
-    scamType: scamTypeFromSignals(analysis.signals.map((s) => s.code)),
-    riskLevel: analysis.risk,
-    receivedAt,
-    text: redactPII(input.message),
-    signals: analysis.signals.map((s) => s.code),
-  });
+  // Index job: an allowlisted, PII-redacted projection of the saved incident goes
+  // to the search index, only with consent. Failures are audited, never fatal.
+  const consentRows = await ctx.memory.readShared("consent", { limit: 1 });
+  const indexed = await indexIncident(
+    incident as unknown as Record<string, unknown>,
+    { userId: ctx.userId, permitted: incidentSearchPermitted((consentRows[0]?.data ?? {}) as Record<string, boolean>) },
+  );
   await ctx.audit.record({
     actor: "guardian",
-    action: "incident.indexed",
+    action: indexed.status === "indexed" ? "incident.indexed" : "incident.index_skipped",
     correlationId: ctx.correlationId,
-    detail: { incidentId: incident.id },
+    detail: { incidentId: incident.id, status: indexed.status, ...(indexed.error ? { error: indexed.error } : {}) },
   });
 
   // Phone directory for outbound SMS: caregiver records carry role/permissions, so

@@ -40,6 +40,11 @@ const SIGNAL_RULES: { pattern: RegExp; code: string; label: string; weight: numb
   { pattern: /refund|overpaid|tech support|microsoft|apple support|your computer (is|has)|virus detected|remote access|anydesk|teamviewer/i, code: "tech_support", label: "Tech-support / refund scam pattern", weight: 2 },
 ];
 
+/** Human-readable label for a signal code (falls back to the code). */
+export function signalLabel(code: string): string {
+  return SIGNAL_RULES.find((r) => r.code === code)?.label ?? code.replace(/_/g, " ");
+}
+
 function riskFromScore(score: number): RiskLevel {
   if (score >= 8) return "critical";
   if (score >= 5) return "high";

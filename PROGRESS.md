@@ -90,6 +90,29 @@ gate. Falls back to the fully-tested sandbox store.
   with cited ids, permission scoping, freshly-screened incident becomes searchable.
 - Demo: `npm run demo:search` (top match for the Margaret message + 2 more queries).
 
+### Track 4 end-to-end upgrade (verified live: Convex + Elasticsearch + Claude)
+- Indexing job `src/agents/guardian/incidentIndexer.ts`: projects each saved incident
+  (Convex when live) onto an explicit field ALLOWLIST, redacts PII, and indexes it only
+  when the `guardianIncidentSearch` consent is on (default on). Verification contacts,
+  caregiver names, and policy internals never reach the index. Index failures are
+  audited (`incident.index_skipped`), never fatal to screening. `runIncidentIndexJob`
+  backfills a user's whole history (idempotent by incident id).
+- Search: query scam signals boost incidents with the same tactics (Jaccard in the
+  sandbox, `signals.keyword` boosts in Elastic); `excludeIncidentIds` stops today's
+  incident matching itself; Elastic highlights become evidence snippets. Elastic
+  `term` filters target `.keyword` (bare fields are `text` under dynamic mapping).
+- Summary `src/agents/guardian/incidentSummary.ts`: Claude writes the answer with
+  dates + evidence; code rejects drafts citing unknown incident ids, missing the top
+  match, or asserting "the same caller", falling back to a deterministic template.
+  The not-same-caller caveat is always appended in code. Incident text is fenced as
+  untrusted data in the prompt (it was written by scammers).
+- Demo `npm run demo:search`: 11 dated past attempts saved, indexed, today's call
+  screened, "Has someone tried this scam before?" answered; 6 checks. Uses a throwaway
+  user id and removes its Convex rows + index docs afterward (`KEEP_DEMO_DATA=1` keeps).
+- Tests: +8 (allowlist/no PII leak, consent off indexes nothing, outage not thrown,
+  most-relevant retrieval excluding self, Claude summary accept / same-caller reject /
+  invented-id reject / negated mention allowed).
+
 ## Track 5 — Fetch.ai agent-to-agent messaging ✅ done
 - `services/uagents/` — Python bridge: two real uAgents (wellness + guardian) in a
   Bureau exchanging typed `AssistanceRequest` / `AssistanceResponse` messages;

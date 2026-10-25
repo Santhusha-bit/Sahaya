@@ -134,6 +134,8 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   caregiverCare: true,
   caregiverWellness: true,
   caregiverFinance: true,
+  /** Index PII-redacted Guardian incidents into the search index ("has this happened before?"). */
+  guardianIncidentSearch: true,
   // --- Wellness (Part 5) ---
   /** Send minimized wellness text to the EXTERNAL Bitdeer model for extraction. */
   wellnessExternalProcessing: true,
