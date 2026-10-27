@@ -1,5 +1,5 @@
-/** The live Sahaya mobile app demo runs on port 3000. */
-export const DEMO_URL = "http://localhost:3000";
+/** The live Sahaya mobile app demo, deployed on Vercel. */
+export const DEMO_URL = "https://sahaya-mu.vercel.app/";
 
 export const NAV_LINKS = [
   { label: "Home", href: "#home" },

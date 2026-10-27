@@ -16,6 +16,7 @@ enforced in code, not in a prompt.
 - Live app: https://sahaya-mu.vercel.app
 - Landing page: https://sahaya-landing-pink.vercel.app
 
+![Sahaya agents](public/Screenshot 2026-10-25 055703.png)
 | Agent | Usecase |
 |---|---|
 | **Guardian** | Scam screening for messages and calls, caller verification, trusted-contact alerts, help coordination | 
