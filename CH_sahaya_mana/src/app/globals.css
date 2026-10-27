@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/*
+ * Sahaya design system. Built for older adults: large type (18px base), high contrast,
+ * generous touch targets (min 48px), calm surfaces. Each agent has one accent hue.
+ */
+@theme {
+  --font-sans: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: #f7f5f0;
+  --color-surface: #ffffff;
+  --color-ink: #1c1b19;
+  --color-ink-muted: #57534e;
+  --color-line: #e7e2d9;
+  --color-brand: #3b3a8f;
+
+  --color-guardian: #2f4fb3;
+  --color-guardian-soft: #e8edfb;
+  --color-care: #1f7a55;
+  --color-care-soft: #e3f3ea;
+  --color-wellness: #b4572b;
+  --color-wellness-soft: #fbeee5;
+  --color-finance: #6a3fa0;
+  --color-finance-soft: #f0e9f8;
+
+  --color-ok: #1f7a55;
+  --color-warn: #9a6400;
+  --color-danger: #b42318;
+
+  --radius-card: 1.25rem;
+}
+
+html {
+  font-size: 112.5%; /* 18px base */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
